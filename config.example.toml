@@ -1,0 +1,45 @@
+# Пример конфигурации llm-bot. Секреты сюда не кладём — они приходят из окружения:
+#   GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY_PATH, LLM_API_KEY, LLM_BASE_URL.
+
+# Как часто опрашиваем GitHub на новые команды.
+poll_interval = "45s"
+
+# Сколько джоб выполняем одновременно.
+concurrency = 1
+
+# Кому разрешено запускать команды. Остальные комментарии игнорируются молча.
+allowed_users = ["zhurik"]
+
+# Необязательный белый список репозиториев. Пусто — все репозитории установки App.
+repos = []
+
+# Данные сервиса: SQLite, кэш репозиториев, worktree, логи джоб.
+data_dir = "data"
+
+# Каталог со скиллами (SKILL.md + skill.toml).
+skills_dir = "skills"
+
+# Сколько ждём завершения текущих джоб при остановке.
+shutdown_timeout = "5m"
+
+[llm]
+# Провайдер и модель по умолчанию, передаются pi. Скилл может переопределить модель.
+default_provider = "anthropic"
+default_model = "claude-sonnet-5"
+
+[docker]
+runner_image = "llm-bot-runner:latest"
+cpu = 2.0
+memory_mb = 2048
+# host = "unix:///var/run/docker.sock"
+
+[github]
+api_base = "https://api.github.com"
+bot_name = "llm-bot"
+bot_email = "llm-bot@users.noreply.github.com"
+
+[limits]
+# Слишком большой PR — отказ с комментарием, без вызова LLM.
+max_diff_bytes = 400000
+max_file_bytes = 200000
+max_changed_files = 100
