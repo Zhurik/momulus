@@ -1,0 +1,8 @@
+# Контракт для оркестратора. Инструкции для модели — в SKILL.md.
+mode = "review"
+tools = ["read", "grep", "find", "ls"]
+files = ["**/*.md", "**/*.mdx"]
+args = []
+timeout = "10m"
+model = ""
+max_comments = 30

@@ -634,6 +634,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "globset"
+version = "0.4.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "07c34a9410465b45bd9787443bc7370f37735bad04b0f0cd57ff1a3186c98988"
+dependencies = [
+ "aho-corasick",
+ "bstr",
+ "log",
+ "regex-automata",
+ "regex-syntax",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -932,6 +945,7 @@ dependencies = [
  "clap",
  "llm-bot-core",
  "llm-bot-queue",
+ "llm-bot-skills",
  "predicates",
  "tempfile",
  "tokio",
@@ -972,6 +986,19 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "llm-bot-skills"
+version = "0.1.0"
+dependencies = [
+ "globset",
+ "humantime-serde",
+ "llm-bot-core",
+ "serde",
+ "tempfile",
+ "thiserror",
+ "toml",
 ]
 
 [[package]]

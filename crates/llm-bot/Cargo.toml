@@ -12,6 +12,7 @@ path = "src/main.rs"
 [dependencies]
 llm-bot-core.workspace = true
 llm-bot-queue.workspace = true
+llm-bot-skills.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 tokio.workspace = true

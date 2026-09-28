@@ -1,0 +1,7 @@
+mode = "review"
+tools = ["read", "grep", "find", "ls"]
+files = []
+args = []
+timeout = "15m"
+model = ""
+max_comments = 20

@@ -21,6 +21,10 @@ pub struct Cli {
     )]
     pub config: PathBuf,
 
+    /// Каталог со скиллами; перебивает значение из конфига.
+    #[arg(long, global = true)]
+    pub skills_dir: Option<PathBuf>,
+
     /// Формат логов.
     #[arg(long, global = true, value_enum, default_value_t = LogFormat::Text)]
     pub log_format: LogFormat,

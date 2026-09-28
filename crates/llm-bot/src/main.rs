@@ -1,6 +1,7 @@
 //! CLI сервиса llm-bot.
 
 mod cli;
+mod commands;
 mod logging;
 
 use anyhow::Result;
@@ -17,11 +18,9 @@ async fn main() -> Result<()> {
         Commands::Serve { .. } => {
             anyhow::bail!("`serve` пока не реализован (этап 7)");
         }
-        Commands::Run { .. } => {
+        Commands::Run(_) => {
             anyhow::bail!("`run` пока не реализован (этап 4)");
         }
-        Commands::Skills { .. } => {
-            anyhow::bail!("`skills` пока не реализован (этап 2)");
-        }
+        Commands::Skills { command } => commands::skills::run(&cli, command),
     }
 }

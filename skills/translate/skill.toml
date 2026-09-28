@@ -1,0 +1,11 @@
+mode = "patch"
+tools = ["read", "write", "edit", "grep", "find", "ls"]
+files = ["**/*.md", "**/*.mdx"]
+args = ["lang"]
+timeout = "20m"
+model = ""
+branch = "llm/{skill}-{lang}-{pr}"
+
+[vars]
+# Конвенция имени файла перевода: posts/hello.mdx + lang=en -> posts/hello.en.mdx
+naming = "{stem}.{lang}{ext}"
