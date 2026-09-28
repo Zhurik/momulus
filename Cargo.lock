@@ -1002,6 +1002,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "llm-bot-workspace"
+version = "0.1.0"
+dependencies = [
+ "llm-bot-core",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "lock_api"
 version = "0.4.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"

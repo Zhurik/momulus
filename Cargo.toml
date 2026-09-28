@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "crates/core",
     "crates/skills",
+    "crates/workspace",
     "crates/queue",
     "crates/llm-bot",
 ]
