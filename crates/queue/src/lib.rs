@@ -1,5 +1,9 @@
 //! Хранилище очереди: SQLite через sqlx.
 
+pub mod store;
+
+pub use store::Store;
+
 use std::path::Path;
 use std::str::FromStr;
 

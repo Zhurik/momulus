@@ -1,0 +1,10 @@
+---
+source: crates/github/src/publisher.rs
+assertion_line: 327
+expression: body
+---
+**typo**: Тавтология: «красивое красивое»
+
+```suggestion
+красивое доменное имя
+```
