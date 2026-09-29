@@ -102,8 +102,9 @@ impl PromptContext<'_> {
         let max = self.skill.contract.max_comments();
         format!(
             "## Что вернуть\n\n\
-             Запиши результат в файл {OUT_DIR}/{FINDINGS_FILE}. Это единственный артефакт;\n\
-             в stdout ничего структурированного писать не нужно.\n\n\
+             Запиши результат инструментом write в файл {OUT_DIR}/{FINDINGS_FILE}.\n\
+             Это единственный артефакт; в stdout ничего структурированного писать не нужно.\n\
+             Рабочая копия {WORK_DIR} смонтирована только для чтения — менять в ней ничего нельзя.\n\n\
              Файл обязан быть валидным JSON по этой JSON Schema:\n\n\
              ```json\n{schema}\n```\n\n\
              Правила:\n\
@@ -165,7 +166,7 @@ mod tests {
     fn review_prompt_snapshot() {
         let skill = skill(
             "proofread",
-            "mode = \"review\"\ntools = [\"read\", \"grep\"]\nfiles = [\"**/*.mdx\"]\nmax_comments = 5",
+            "mode = \"review\"\ntools = [\"read\", \"grep\", \"write\"]\nfiles = [\"**/*.mdx\"]\nmax_comments = 5",
         );
         let files = vec!["posts/hello.mdx".to_string(), "posts/next.mdx".to_string()];
         let ctx = PromptContext {
@@ -202,7 +203,7 @@ mod tests {
 
     #[test]
     fn local_origin_prompt_snapshot() {
-        let skill = skill("review", "mode = \"review\"\ntools = [\"read\"]");
+        let skill = skill("review", "mode = \"review\"\ntools = [\"read\", \"write\"]");
         let files = vec!["src/main.rs".to_string()];
         let ctx = PromptContext {
             skill: &skill,
@@ -217,7 +218,10 @@ mod tests {
 
     #[test]
     fn retry_prompt_mentions_the_error() {
-        let skill = skill("proofread", "mode = \"review\"\ntools = [\"read\"]");
+        let skill = skill(
+            "proofread",
+            "mode = \"review\"\ntools = [\"read\", \"write\"]",
+        );
         let files = vec!["a.mdx".to_string()];
         let ctx = PromptContext {
             skill: &skill,
@@ -239,7 +243,10 @@ mod tests {
 
     #[test]
     fn empty_file_list_is_explicit() {
-        let skill = skill("proofread", "mode = \"review\"\ntools = [\"read\"]");
+        let skill = skill(
+            "proofread",
+            "mode = \"review\"\ntools = [\"read\", \"write\"]",
+        );
         let ctx = PromptContext {
             skill: &skill,
             files: &[],

@@ -11,7 +11,7 @@ use bollard::query_parameters::{
     RemoveContainerOptionsBuilder, StartContainerOptions, WaitContainerOptionsBuilder,
 };
 use futures::StreamExt;
-use llm_bot_core::{Error, Mount, Redactor, Result, RunResult, RunSpec, Runner};
+use llm_bot_core::{Error, Mount, ProviderApi, Redactor, Result, RunResult, RunSpec, Runner};
 
 /// Куда монтируется рабочая копия.
 pub const WORK_MOUNT: &str = "/work";
@@ -283,19 +283,41 @@ impl DockerRunner {
     }
 }
 
-/// Генерирует `models.json` для pi, когда у провайдера свой base URL.
-pub fn models_json(provider: &str, base_url: &str, api_key_env: &str) -> Result<String> {
+/// Генерирует `models.json` для pi: описание провайдера, которого нет среди
+/// встроенных (например OpenAI-совместимый шлюз), плюс список его моделей.
+///
+/// Ключ в файл не попадает: pi подставит его из переменной окружения.
+pub fn models_json(
+    provider: &str,
+    base_url: &str,
+    api_key_env: &str,
+    api: Option<ProviderApi>,
+    models: &[&str],
+) -> Result<String> {
     if base_url.is_empty() {
         return Err(Error::Config("base URL пустой".into()));
     }
-    let value = serde_json::json!({
-        "providers": {
-            provider: {
-                "baseUrl": base_url,
-                "apiKey": format!("${api_key_env}"),
-            }
-        }
-    });
+    let mut spec = serde_json::Map::new();
+    spec.insert("baseUrl".into(), serde_json::json!(base_url));
+    spec.insert(
+        "apiKey".into(),
+        serde_json::json!(format!("${api_key_env}")),
+    );
+    if let Some(api) = api {
+        spec.insert("api".into(), serde_json::json!(api.as_str()));
+    }
+    if !models.is_empty() {
+        spec.insert(
+            "models".into(),
+            serde_json::json!(
+                models
+                    .iter()
+                    .map(|id| serde_json::json!({ "id": id }))
+                    .collect::<Vec<_>>()
+            ),
+        );
+    }
+    let value = serde_json::json!({ "providers": { provider: spec } });
     serde_json::to_string_pretty(&value).map_err(|e| Error::Internal(e.to_string()))
 }
 
@@ -413,14 +435,44 @@ mod tests {
     }
 
     #[test]
-    fn models_json_uses_env_interpolation_not_the_key() {
-        let json = models_json("anthropic", "https://proxy.local/v1", "ANTHROPIC_API_KEY").unwrap();
+    fn models_json_describes_an_openai_compatible_provider() {
+        let json = models_json(
+            "cloudru",
+            "https://foundation-models.api.cloud.ru/v1",
+            "CLOUDRU_API_KEY",
+            Some(ProviderApi::OpenaiCompletions),
+            &["zai-org/GLM-5.1"],
+        )
+        .unwrap();
         assert!(
-            json.contains("\"baseUrl\": \"https://proxy.local/v1\""),
+            json.contains("\"baseUrl\": \"https://foundation-models.api.cloud.ru/v1\""),
             "{json}"
         );
+        assert!(json.contains("\"api\": \"openai-completions\""), "{json}");
+        assert!(json.contains("\"id\": \"zai-org/GLM-5.1\""), "{json}");
+        // Ключ подставляет pi из окружения: в файле только имя переменной.
+        assert!(json.contains("$CLOUDRU_API_KEY"), "{json}");
+    }
+
+    #[test]
+    fn models_json_for_builtin_provider_only_overrides_endpoint() {
+        let json = models_json(
+            "anthropic",
+            "https://proxy.local/v1",
+            "ANTHROPIC_API_KEY",
+            None,
+            &[],
+        )
+        .unwrap();
+        assert!(json.contains("baseUrl"), "{json}");
         assert!(json.contains("$ANTHROPIC_API_KEY"), "{json}");
-        assert!(!json.contains("sk-"), "{json}");
+        assert!(!json.contains("\"api\""), "{json}");
+        assert!(!json.contains("models"), "{json}");
+    }
+
+    #[test]
+    fn models_json_requires_base_url() {
+        assert!(models_json("cloudru", "", "K", None, &[]).is_err());
     }
 
     #[test]

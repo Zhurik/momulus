@@ -214,13 +214,13 @@ mod tests {
         write_skill(
             tmp.path(),
             "review",
-            "mode = \"review\"\ntools = [\"read\"]",
+            "mode = \"review\"\ntools = [\"read\", \"write\"]",
             &doc_for("review"),
         );
         write_skill(
             tmp.path(),
             "proofread",
-            "mode = \"review\"\ntools = [\"read\"]\nfiles = [\"**/*.mdx\"]",
+            "mode = \"review\"\ntools = [\"read\", \"write\"]\nfiles = [\"**/*.mdx\"]",
             &doc_for("proofread"),
         );
         let registry = Registry::load(tmp.path()).unwrap();
@@ -234,7 +234,7 @@ mod tests {
         write_skill(
             tmp.path(),
             "review",
-            "mode = \"review\"\ntools = [\"read\"]",
+            "mode = \"review\"\ntools = [\"read\", \"write\"]",
             &doc_for("review"),
         );
         std::fs::create_dir_all(tmp.path().join(".git")).unwrap();
@@ -259,13 +259,13 @@ mod tests {
         write_skill(
             tmp.path(),
             "b",
-            "mode = \"review\"\ntools = [\"read\"]",
+            "mode = \"review\"\ntools = [\"read\", \"write\"]",
             "без frontmatter",
         );
         write_skill(
             tmp.path(),
             "ok",
-            "mode = \"review\"\ntools = [\"read\"]",
+            "mode = \"review\"\ntools = [\"read\", \"write\"]",
             &doc_for("ok"),
         );
         let report = Registry::load_report(tmp.path()).unwrap();
@@ -293,7 +293,7 @@ mod tests {
         write_skill(
             tmp.path(),
             "translate",
-            "mode = \"patch\"\ntools = [\"edit\"]\nargs = [\"lang\"]",
+            "mode = \"patch\"\ntools = [\"write\", \"edit\"]\nargs = [\"lang\"]",
             &doc_for("translate"),
         );
         let registry = Registry::load(tmp.path()).unwrap();

@@ -1,5 +1,6 @@
 mode = "review"
-tools = ["read", "grep", "find", "ls"]
+# write — только для /out/findings.json: /work монтируется read-only.
+tools = ["read", "grep", "find", "ls", "write"]
 files = []
 args = []
 timeout = "15m"

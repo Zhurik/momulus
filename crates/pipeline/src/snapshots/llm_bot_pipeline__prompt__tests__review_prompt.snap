@@ -1,6 +1,5 @@
 ---
 source: crates/pipeline/src/prompt.rs
-assertion_line: 180
 expression: ctx.render()
 ---
 /skill:proofread
@@ -14,8 +13,9 @@ expression: ctx.render()
 
 ## Что вернуть
 
-Запиши результат в файл /out/findings.json. Это единственный артефакт;
-в stdout ничего структурированного писать не нужно.
+Запиши результат инструментом write в файл /out/findings.json.
+Это единственный артефакт; в stdout ничего структурированного писать не нужно.
+Рабочая копия /work смонтирована только для чтения — менять в ней ничего нельзя.
 
 Файл обязан быть валидным JSON по этой JSON Schema:
 

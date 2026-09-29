@@ -1,6 +1,8 @@
 # Контракт для оркестратора. Инструкции для модели — в SKILL.md.
 mode = "review"
-tools = ["read", "grep", "find", "ls"]
+# write нужен, чтобы записать /out/findings.json; рабочая копия смонтирована
+# только для чтения, так что писать в неё агент всё равно не может.
+tools = ["read", "grep", "find", "ls", "write"]
 files = ["**/*.md", "**/*.mdx"]
 args = []
 timeout = "10m"

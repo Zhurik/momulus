@@ -11,7 +11,7 @@ pub mod traits;
 pub mod types;
 
 pub use command::{Args, Command, CommandParseError};
-pub use config::{Config, Secrets};
+pub use config::{Config, ProviderApi, Secrets};
 pub use error::{Error, ErrorKind, Result};
 pub use redact::Redactor;
 pub use traits::{Publisher, Runner, Trigger};

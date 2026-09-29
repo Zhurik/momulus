@@ -66,9 +66,39 @@ pub struct LlmConfig {
     #[serde(default = "default_model")]
     pub default_model: String,
     /// Имя переменной окружения, в которой pi ждёт ключ провайдера.
-    /// Пусто — выводим из имени провайдера (anthropic -> ANTHROPIC_API_KEY).
+    /// Пусто — выводим из имени провайдера (cloudru -> CLOUDRU_API_KEY).
     #[serde(default)]
     pub api_key_env: Option<String>,
+
+    /// Протокол провайдера для pi: нужен, когда провайдер не встроен в pi
+    /// и описывается через models.json. Пусто — провайдер встроенный.
+    #[serde(default)]
+    pub api: Option<ProviderApi>,
+}
+
+/// Протоколы, которые умеет pi (значение поля `api` в models.json).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ProviderApi {
+    OpenaiCompletions,
+    OpenaiResponses,
+    AnthropicMessages,
+    GoogleGenerativeAi,
+    BedrockConverse,
+    AzureOpenaiResponses,
+}
+
+impl ProviderApi {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ProviderApi::OpenaiCompletions => "openai-completions",
+            ProviderApi::OpenaiResponses => "openai-responses",
+            ProviderApi::AnthropicMessages => "anthropic-messages",
+            ProviderApi::GoogleGenerativeAi => "google-generative-ai",
+            ProviderApi::BedrockConverse => "bedrock-converse",
+            ProviderApi::AzureOpenaiResponses => "azure-openai-responses",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -135,10 +165,13 @@ fn default_shutdown_timeout() -> Duration {
     Duration::from_secs(300)
 }
 fn default_provider() -> String {
-    "anthropic".to_string()
+    "cloudru".to_string()
 }
 fn default_model() -> String {
-    "claude-sonnet-5".to_string()
+    "zai-org/GLM-5.1".to_string()
+}
+fn default_api() -> Option<ProviderApi> {
+    Some(ProviderApi::OpenaiCompletions)
 }
 fn default_runner_image() -> String {
     "llm-bot-runner:latest".to_string()
@@ -174,6 +207,7 @@ impl Default for LlmConfig {
             default_provider: default_provider(),
             default_model: default_model(),
             api_key_env: None,
+            api: default_api(),
         }
     }
 }
@@ -217,6 +251,23 @@ impl LlmConfig {
             return name.clone();
         }
         provider_key_env(&self.default_provider)
+    }
+
+    /// Нужно ли описывать провайдера через models.json.
+    pub fn needs_models_json(&self) -> bool {
+        self.api.is_some()
+    }
+
+    /// Проверяет, что провайдера хватит для запуска pi.
+    pub fn check_ready(&self, base_url: Option<&str>) -> Result<()> {
+        if self.needs_models_json() && base_url.is_none_or(str::is_empty) {
+            return Err(Error::Config(format!(
+                "провайдер {:?} описан через llm.api = {:?}, значит нужен {ENV_LLM_BASE_URL}",
+                self.default_provider,
+                self.api.map(|a| a.as_str()).unwrap_or_default()
+            )));
+        }
+        Ok(())
     }
 }
 
@@ -507,6 +558,56 @@ mod tests {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config.example.toml");
         let text = std::fs::read_to_string(&path).expect("config.example.toml exists");
         Config::from_toml(&text).expect("config.example.toml parses");
+    }
+
+    #[test]
+    fn default_provider_is_cloudru_glm() {
+        let config = Config::from_toml(MINIMAL).unwrap();
+        assert_eq!(config.llm.default_provider, "cloudru");
+        assert_eq!(config.llm.default_model, "zai-org/GLM-5.1");
+        assert_eq!(config.llm.api, Some(ProviderApi::OpenaiCompletions));
+        assert_eq!(config.llm.api_key_env(), "CLOUDRU_API_KEY");
+    }
+
+    #[test]
+    fn custom_provider_requires_base_url() {
+        let config = Config::from_toml(MINIMAL).unwrap();
+        let err = config.llm.check_ready(None).unwrap_err();
+        assert!(err.to_string().contains(ENV_LLM_BASE_URL), "{err}");
+        assert!(err.to_string().contains("openai-completions"), "{err}");
+        config
+            .llm
+            .check_ready(Some("https://foundation-models.api.cloud.ru/v1"))
+            .unwrap();
+    }
+
+    #[test]
+    fn builtin_provider_needs_no_base_url() {
+        let config = Config::from_toml(
+            r#"
+            allowed_users = ["zhurik"]
+            [llm]
+            default_provider = "anthropic"
+            default_model = "claude-sonnet-5"
+        "#,
+        )
+        .unwrap();
+        assert_eq!(config.llm.api, None);
+        assert!(!config.llm.needs_models_json());
+        config.llm.check_ready(None).unwrap();
+    }
+
+    #[test]
+    fn unknown_provider_api_is_rejected() {
+        let err = Config::from_toml(
+            r#"
+            allowed_users = ["zhurik"]
+            [llm]
+            api = "grpc-magic"
+        "#,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("openai-completions"), "{err}");
     }
 
     #[test]

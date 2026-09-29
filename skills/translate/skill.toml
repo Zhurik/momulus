@@ -7,5 +7,8 @@ model = ""
 branch = "llm/{skill}-{lang}-{pr}"
 
 [vars]
-# Конвенция имени файла перевода: posts/hello.mdx + lang=en -> posts/hello.en.mdx
-naming = "{stem}.{lang}{ext}"
+# Конвенция имени файла перевода. {dir} — каталог оригинала, {stem} — имя без
+# расширения и без кода языка, {lang} — целевой язык, {ext} — расширение:
+#   content/posts/dns/index.ru.md + lang=en -> content/posts/dns/index.en.md
+#   posts/hello.mdx               + lang=en -> posts/hello.en.mdx
+naming = "{dir}/{stem}.{lang}{ext}"

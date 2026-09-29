@@ -29,7 +29,7 @@ fn fixture_skills(dir: &std::path::Path, broken: bool) {
     std::fs::create_dir_all(&ok).unwrap();
     std::fs::write(
         ok.join("skill.toml"),
-        "mode = \"review\"\ntools = [\"read\"]\nfiles = [\"**/*.mdx\"]\n",
+        "mode = \"review\"\ntools = [\"read\", \"write\"]\nfiles = [\"**/*.mdx\"]\n",
     )
     .unwrap();
     std::fs::write(

@@ -24,8 +24,19 @@ shutdown_timeout = "5m"
 
 [llm]
 # Провайдер и модель по умолчанию, передаются pi. Скилл может переопределить модель.
-default_provider = "anthropic"
-default_model = "claude-sonnet-5"
+# Здесь — OpenAI-совместимый шлюз Cloud.ru Foundation Models с GLM-5.1.
+default_provider = "cloudru"
+default_model = "zai-org/GLM-5.1"
+
+# Протокол провайдера. Задавать нужно только для провайдеров, которых нет среди
+# встроенных в pi: тогда llm-bot опишет его в models.json контейнера, а base URL
+# возьмёт из LLM_BASE_URL (для Cloud.ru — https://foundation-models.api.cloud.ru/v1).
+# Для встроенного провайдера (anthropic, openai, google, ...) поле нужно убрать.
+api = "openai-completions"
+
+# Имя переменной окружения, в которой pi ждёт ключ.
+# Пусто — выводится из имени провайдера: cloudru -> CLOUDRU_API_KEY.
+# api_key_env = "CLOUDRU_API_KEY"
 
 [docker]
 runner_image = "llm-bot-runner:latest"

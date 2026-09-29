@@ -6,8 +6,9 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use llm_bot_core::{JobId, Mount, Redactor, RunSpec, Runner, config::provider_key_env};
-use llm_bot_runner_docker::DockerRunner;
+use llm_bot_core::config::{ProviderApi, provider_key_env};
+use llm_bot_core::{JobId, Mount, Redactor, RunSpec, Runner};
+use llm_bot_runner_docker::{DockerRunner, models_json};
 
 fn skills_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../skills")
@@ -30,8 +31,20 @@ async fn runs_proofread_with_real_pi() {
         eprintln!("пропуск: LLM_API_KEY не задан");
         return;
     };
-    let provider = std::env::var("LLM_PROVIDER").unwrap_or_else(|_| "anthropic".to_string());
-    let model = std::env::var("LLM_MODEL").unwrap_or_else(|_| "claude-sonnet-5".to_string());
+    let provider = std::env::var("LLM_PROVIDER").unwrap_or_else(|_| "cloudru".to_string());
+    let model = std::env::var("LLM_MODEL").unwrap_or_else(|_| "zai-org/GLM-5.1".to_string());
+    let base_url = std::env::var("LLM_BASE_URL")
+        .unwrap_or_else(|_| "https://foundation-models.api.cloud.ru/v1".to_string());
+    let key_env = provider_key_env(&provider);
+    // Провайдера, которого нет среди встроенных в pi, описываем через models.json.
+    let agent_config = models_json(
+        &provider,
+        &base_url,
+        &key_env,
+        Some(ProviderApi::OpenaiCompletions),
+        &[model.as_str()],
+    )
+    .expect("описание провайдера");
 
     let tmp = tempfile::tempdir().unwrap();
     let work = tmp.path().join("work");
@@ -48,8 +61,8 @@ async fn runs_proofread_with_real_pi() {
 
     let prompt = String::from(
         "/skill:proofread\n\nРабочая копия в /work. Проверь файл posts/hello.mdx.\n\
-         Запиши результат строго в /out/findings.json: объект с полями summary (строка) \
-         и findings (массив объектов path, line, severity, body).\n",
+         Запиши результат инструментом write строго в /out/findings.json: объект с полями \
+         summary (строка) и findings (массив объектов path, line, severity, body).\n",
     );
 
     let spec = RunSpec {
@@ -60,7 +73,7 @@ async fn runs_proofread_with_real_pi() {
         out_dir: out.clone(),
         mount: Mount::ReadOnly,
         prompt,
-        tools: vec!["read".into(), "grep".into(), "ls".into()],
+        tools: vec!["read".into(), "grep".into(), "ls".into(), "write".into()],
         provider: provider.clone(),
         model: Some(model),
         timeout: Duration::from_secs(600),
@@ -68,8 +81,8 @@ async fn runs_proofread_with_real_pi() {
             .unwrap_or_else(|_| "llm-bot-runner:latest".to_string()),
         cpu_limit: 2.0,
         memory_limit_mb: 2048,
-        env: vec![(provider_key_env(&provider), api_key)],
-        agent_config: None,
+        env: vec![(key_env, api_key)],
+        agent_config: Some(agent_config),
     };
 
     let result = runner.run(spec).await.expect("контейнер отработал");

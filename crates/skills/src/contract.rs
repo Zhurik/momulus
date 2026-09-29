@@ -103,6 +103,18 @@ impl SkillContract {
                 "mode = \"patch\" требует непустой tools: агент должен уметь править файлы".into(),
             ));
         }
+        // Без write агент не сможет записать артефакт: в review это findings.json,
+        // в patch — правки файлов. Рабочую копию review-скилла защищает
+        // не отсутствие write, а монтирование /work только для чтения.
+        if !self.tools.is_empty() && !self.tools.iter().any(|t| t == "write") {
+            let what = match self.mode {
+                Mode::Review => "записать /out/findings.json",
+                Mode::Patch => "создавать файлы",
+            };
+            return Err(fail(format!(
+                "в tools нет \"write\", а без него агент не сможет {what}"
+            )));
+        }
         for tool in &self.tools {
             if tool.trim().is_empty() {
                 return Err(fail("tools содержит пустую строку".into()));
@@ -349,7 +361,7 @@ mod tests {
 
     const REVIEW: &str = r#"
         mode = "review"
-        tools = ["read", "grep"]
+        tools = ["read", "grep", "write"]
         files = ["**/*.md", "**/*.mdx"]
         timeout = "10m"
         max_comments = 5
@@ -359,7 +371,7 @@ mod tests {
     fn parses_review_contract() {
         let c = SkillContract::parse("proofread", REVIEW).unwrap();
         assert_eq!(c.mode, Mode::Review);
-        assert_eq!(c.tools, vec!["read", "grep"]);
+        assert_eq!(c.tools, vec!["read", "grep", "write"]);
         assert_eq!(c.timeout, Duration::from_secs(600));
         assert_eq!(c.max_comments(), 5);
         assert!(c.model.is_empty());
@@ -412,7 +424,7 @@ mod tests {
     fn rejects_max_comments_in_patch_mode() {
         let err = SkillContract::parse(
             "x",
-            "mode = \"patch\"\ntools = [\"edit\"]\nmax_comments = 3",
+            "mode = \"patch\"\ntools = [\"write\"]\nmax_comments = 3",
         )
         .unwrap_err();
         assert!(err.to_string().contains("max_comments"), "{err}");
@@ -424,6 +436,13 @@ mod tests {
         assert!(err.to_string().contains("timeout"), "{err}");
         let err = SkillContract::parse("x", "mode = \"review\"\ntimeout = \"0s\"").unwrap_err();
         assert!(err.to_string().contains("timeout"), "{err}");
+    }
+
+    #[test]
+    fn rejects_tools_without_write() {
+        let err = SkillContract::parse("x", "mode = \"review\"\ntools = [\"read\"]").unwrap_err();
+        assert!(err.to_string().contains("write"), "{err}");
+        assert!(err.to_string().contains("findings.json"), "{err}");
     }
 
     #[test]
@@ -452,7 +471,7 @@ mod tests {
     fn branch_name_expands_template() {
         let c = SkillContract::parse(
             "translate",
-            "mode = \"patch\"\ntools = [\"edit\"]\nbranch = \"llm/{skill}-{pr}\"",
+            "mode = \"patch\"\ntools = [\"write\"]\nbranch = \"llm/{skill}-{pr}\"",
         )
         .unwrap();
         assert_eq!(
@@ -463,7 +482,7 @@ mod tests {
 
     #[test]
     fn default_branch_template_is_used() {
-        let c = SkillContract::parse("t", "mode = \"patch\"\ntools = [\"edit\"]").unwrap();
+        let c = SkillContract::parse("t", "mode = \"patch\"\ntools = [\"write\"]").unwrap();
         assert_eq!(c.branch_name("t", 3, &BTreeMap::new()), "llm/t-3");
     }
 
@@ -471,7 +490,7 @@ mod tests {
     fn resolves_positional_args() {
         let c = SkillContract::parse(
             "translate",
-            "mode = \"patch\"\ntools = [\"edit\"]\nargs = [\"lang\"]",
+            "mode = \"patch\"\ntools = [\"write\"]\nargs = [\"lang\"]",
         )
         .unwrap();
         let cmd = Command::parse("/llm translate en").unwrap();
@@ -483,7 +502,7 @@ mod tests {
     fn resolves_named_args() {
         let c = SkillContract::parse(
             "translate",
-            "mode = \"patch\"\ntools = [\"edit\"]\nargs = [\"lang\"]",
+            "mode = \"patch\"\ntools = [\"write\"]\nargs = [\"lang\"]",
         )
         .unwrap();
         let cmd = Command::parse("/llm translate lang=de").unwrap();
@@ -495,7 +514,7 @@ mod tests {
     fn reports_missing_args() {
         let c = SkillContract::parse(
             "translate",
-            "mode = \"patch\"\ntools = [\"edit\"]\nargs = [\"lang\"]",
+            "mode = \"patch\"\ntools = [\"write\"]\nargs = [\"lang\"]",
         )
         .unwrap();
         let cmd = Command::parse("/llm translate").unwrap();
@@ -507,7 +526,7 @@ mod tests {
     fn reports_unknown_and_extra_args() {
         let c = SkillContract::parse(
             "translate",
-            "mode = \"patch\"\ntools = [\"edit\"]\nargs = [\"lang\"]",
+            "mode = \"patch\"\ntools = [\"write\"]\nargs = [\"lang\"]",
         )
         .unwrap();
         let cmd = Command::parse("/llm translate style=formal").unwrap();
@@ -523,7 +542,7 @@ mod tests {
     fn branch_name_expands_skill_args() {
         let c = SkillContract::parse(
             "translate",
-            "mode = \"patch\"\ntools = [\"edit\"]\nargs = [\"lang\"]\nbranch = \"llm/{skill}-{lang}-{pr}\"",
+            "mode = \"patch\"\ntools = [\"write\"]\nargs = [\"lang\"]\nbranch = \"llm/{skill}-{lang}-{pr}\"",
         )
         .unwrap();
         let args = BTreeMap::from([("lang".to_string(), "en GB".to_string())]);
@@ -537,7 +556,7 @@ mod tests {
     fn rejects_unknown_branch_placeholder() {
         let err = SkillContract::parse(
             "t",
-            "mode = \"patch\"\ntools = [\"edit\"]\nbranch = \"llm/{lang}\"",
+            "mode = \"patch\"\ntools = [\"write\"]\nbranch = \"llm/{lang}\"",
         )
         .unwrap_err();
         assert!(err.to_string().contains("placeholder"), "{err}");
@@ -547,7 +566,7 @@ mod tests {
     fn vars_are_free_form() {
         let c = SkillContract::parse(
             "translate",
-            "mode = \"patch\"\ntools = [\"edit\"]\n[vars]\nnaming = \"{stem}.{lang}{ext}\"",
+            "mode = \"patch\"\ntools = [\"write\"]\n[vars]\nnaming = \"{stem}.{lang}{ext}\"",
         )
         .unwrap();
         assert_eq!(

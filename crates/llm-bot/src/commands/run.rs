@@ -136,12 +136,15 @@ fn build_runner(
             let key = secrets
                 .require_llm_api_key()
                 .context("для реального прогона нужен ключ провайдера")?;
+            config.llm.check_ready(secrets.llm_base_url.as_deref())?;
             env.push((config.llm.api_key_env(), key.to_string()));
             if let Some(base_url) = &secrets.llm_base_url {
                 agent_config = Some(models_json(
                     &config.llm.default_provider,
                     base_url,
                     &config.llm.api_key_env(),
+                    config.llm.api,
+                    &[model.as_str()],
                 )?);
             }
             let redactor = secrets.redactor();
