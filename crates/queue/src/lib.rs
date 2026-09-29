@@ -1,8 +1,12 @@
 //! Хранилище очереди: SQLite через sqlx.
 
+pub mod jobs;
 pub mod store;
+pub mod worker;
 
+pub use jobs::StoredJob;
 pub use store::Store;
+pub use worker::{JobHandler, Worker, WorkerConfig};
 
 use std::path::Path;
 use std::str::FromStr;

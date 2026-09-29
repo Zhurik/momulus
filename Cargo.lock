@@ -1491,8 +1491,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
+ "async-trait",
  "clap",
  "llm-bot-core",
+ "llm-bot-github",
  "llm-bot-pipeline",
  "llm-bot-queue",
  "llm-bot-runner-docker",
@@ -1501,6 +1503,7 @@ dependencies = [
  "predicates",
  "tempfile",
  "tokio",
+ "tokio-util",
  "tracing",
  "tracing-subscriber",
 ]
@@ -1556,14 +1559,20 @@ dependencies = [
  "async-trait",
  "insta",
  "llm-bot-core",
+ "llm-bot-github",
+ "llm-bot-queue",
  "llm-bot-skills",
  "llm-bot-workspace",
+ "octocrab",
  "schemars",
  "serde",
  "serde_json",
  "tempfile",
  "tokio",
+ "tokio-util",
  "tracing",
+ "url",
+ "wiremock",
 ]
 
 [[package]]
@@ -1579,7 +1588,9 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "tokio-util",
  "tracing",
+ "uuid",
 ]
 
 [[package]]

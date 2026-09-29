@@ -8,7 +8,7 @@ use llm_bot_core::{
     AckState, CommentKind, CommentRef, Finding, JobId, JobRef, Patch, PrRef, Publisher, Severity,
     config::GithubConfig,
 };
-use llm_bot_github::{GithubPublisher, StaticToken};
+use llm_bot_github::GithubPublisher;
 use llm_bot_workspace::Git;
 use octocrab::Octocrab;
 use serde_json::json;
@@ -27,10 +27,10 @@ fn client(server: &MockServer) -> Octocrab {
 
 fn publisher(server: &MockServer) -> GithubPublisher {
     GithubPublisher::new(
-        client(server),
+        Arc::new(llm_bot_github::FixedClient(client(server))),
         Git::default(),
         GithubConfig::default(),
-        Arc::new(StaticToken("ghs_test_token".into())),
+        Arc::new(llm_bot_core::LocalGitAccess),
     )
     .with_backoff(llm_bot_github::backoff::Backoff {
         attempts: 3,

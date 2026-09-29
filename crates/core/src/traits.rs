@@ -64,3 +64,21 @@ pub trait SkillCatalog: Send + Sync {
     async fn contains(&self, skill: &str) -> bool;
     async fn help_text(&self) -> String;
 }
+
+/// Доступ к git-ремоуту платформы: токен и нужные refspec'и.
+///
+/// Разные платформы по-разному называют ссылки на PR, поэтому это тоже
+/// платформенная деталь за трейтом.
+#[async_trait]
+pub trait GitAccess: Send + Sync {
+    /// Токен для fetch/push; `None` — ремоут доступен без авторизации.
+    async fn git_token(&self, pr: &PrRef) -> Result<Option<String>>;
+
+    /// Что подтянуть, чтобы получить head PR и его базовую ветку.
+    fn refspecs(&self, pr: &PrRef) -> Vec<String>;
+
+    /// Ссылка, от которой считаем diff PR (обычно базовая ветка).
+    fn base_rev(&self, pr: &PrRef) -> String {
+        format!("refs/heads/{}", pr.base_ref)
+    }
+}

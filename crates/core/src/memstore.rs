@@ -7,7 +7,8 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
 use crate::error::Result;
-use crate::traits::{CursorStore, SkillCatalog};
+use crate::traits::{CursorStore, GitAccess, SkillCatalog};
+use crate::types::PrRef;
 
 /// Курсоры и метки в памяти.
 #[derive(Debug, Default)]
@@ -121,5 +122,20 @@ mod tests {
         assert!(catalog.contains("proofread").await);
         assert!(!catalog.contains("nope").await);
         assert!(catalog.help_text().await.contains("/llm translate"));
+    }
+}
+
+/// Доступ к git без авторизации: локальный remote в тестах и прогонах на диске.
+#[derive(Debug, Clone, Default)]
+pub struct LocalGitAccess;
+
+#[async_trait]
+impl GitAccess for LocalGitAccess {
+    async fn git_token(&self, _pr: &PrRef) -> Result<Option<String>> {
+        Ok(None)
+    }
+
+    fn refspecs(&self, _pr: &PrRef) -> Vec<String> {
+        vec!["+refs/heads/*:refs/heads/*".to_string()]
     }
 }

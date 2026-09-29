@@ -14,9 +14,9 @@ pub mod types;
 pub use command::{Args, Command, CommandParseError};
 pub use config::{Config, ProviderApi, Secrets};
 pub use error::{Error, ErrorKind, Result};
-pub use memstore::{MemoryCursorStore, StaticSkillCatalog};
+pub use memstore::{LocalGitAccess, MemoryCursorStore, StaticSkillCatalog};
 pub use redact::Redactor;
-pub use traits::{CursorStore, Publisher, Runner, SkillCatalog, Trigger};
+pub use traits::{CursorStore, GitAccess, Publisher, Runner, SkillCatalog, Trigger};
 pub use types::{
     AckState, CommentKind, CommentRef, Finding, Job, JobId, JobRef, JobStatus, Mount, Patch, PrRef,
     ReviewOutput, RunResult, RunSpec, Severity,

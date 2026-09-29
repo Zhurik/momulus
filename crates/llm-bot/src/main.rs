@@ -15,9 +15,7 @@ async fn main() -> Result<()> {
     logging::init(cli.log_format, &cli.log_level)?;
 
     match &cli.command {
-        Commands::Serve { .. } => {
-            anyhow::bail!("`serve` пока не реализован (этап 7)");
-        }
+        Commands::Serve { dry_run } => commands::serve::run(&cli, *dry_run).await,
         Commands::Run(args) => commands::run::run(&cli, args).await,
         Commands::Skills { command } => commands::skills::run(&cli, command),
     }

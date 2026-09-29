@@ -41,6 +41,7 @@ pub async fn run_review(
     runner: &dyn Runner,
     spec: RunSpec,
     ctx: &PromptContext<'_>,
+    log_path: Option<&Path>,
 ) -> Result<ReviewStep> {
     let findings_path = spec.out_dir.join(FINDINGS_FILE);
     let mut runs = Vec::new();
@@ -55,6 +56,8 @@ pub async fn run_review(
         let result = runner.run(attempt_spec).await?;
         let failure = check_run(&result, &spec);
         runs.push(result);
+        // Лог пишем сразу: он нужен и когда попытка провалилась.
+        write_log(log_path, &runs);
         if let Some(err) = failure {
             return Err(err);
         }
@@ -80,12 +83,14 @@ pub async fn run_patch(
     runner: &dyn Runner,
     spec: RunSpec,
     ctx: &PromptContext<'_>,
+    log_path: Option<&Path>,
 ) -> Result<PatchStep> {
     let mut attempt_spec = spec.clone();
     attempt_spec.prompt = ctx.render();
     let result = runner.run(attempt_spec).await?;
     let failure = check_run(&result, &spec);
     let runs = vec![result];
+    write_log(log_path, &runs);
     if let Some(err) = failure {
         return Err(err);
     }
@@ -161,6 +166,20 @@ pub fn read_summary(out_dir: &Path) -> Option<String> {
         .ok()
         .map(|text| text.trim().to_string())
         .filter(|text| !text.is_empty())
+}
+
+/// Пишет лог попыток в файл; ошибку записи только логируем.
+fn write_log(log_path: Option<&Path>, runs: &[RunResult]) {
+    let Some(path) = log_path else { return };
+    if let Some(parent) = path.parent()
+        && let Err(err) = std::fs::create_dir_all(parent)
+    {
+        tracing::warn!(error = %err, path = %parent.display(), "каталог логов не создан");
+        return;
+    }
+    if let Err(err) = std::fs::write(path, combined_log(runs)) {
+        tracing::warn!(error = %err, path = %path.display(), "лог не записан");
+    }
 }
 
 /// Склеивает логи всех попыток для файла джобы.
@@ -259,7 +278,7 @@ mod tests {
             },
         };
         let runner = FakeRunner::with_findings(r#"{"summary":"ок","findings":[]}"#);
-        let step = run_review(&runner, spec(f.out.clone(), f.work.clone()), &ctx)
+        let step = run_review(&runner, spec(f.out.clone(), f.work.clone()), &ctx, None)
             .await
             .unwrap();
 
@@ -283,7 +302,7 @@ mod tests {
             FakeResponse::findings("извини, не смог"),
             FakeResponse::findings(r#"{"summary":"со второй попытки","findings":[]}"#),
         ]);
-        let step = run_review(&runner, spec(f.out.clone(), f.work.clone()), &ctx)
+        let step = run_review(&runner, spec(f.out.clone(), f.work.clone()), &ctx, None)
             .await
             .unwrap();
 
@@ -324,7 +343,7 @@ mod tests {
                 r#"{"summary":"s","findings":[{"path":"a","line":1,"severity":"ой","body":"b"}]}"#,
             ),
         ]);
-        let err = run_review(&runner, spec(f.out.clone(), f.work.clone()), &ctx)
+        let err = run_review(&runner, spec(f.out.clone(), f.work.clone()), &ctx, None)
             .await
             .unwrap_err();
 
@@ -345,7 +364,7 @@ mod tests {
             },
         };
         let runner = FakeRunner::new(vec![FakeResponse::empty(), FakeResponse::empty()]);
-        let err = run_review(&runner, spec(f.out.clone(), f.work.clone()), &ctx)
+        let err = run_review(&runner, spec(f.out.clone(), f.work.clone()), &ctx, None)
             .await
             .unwrap_err();
 
@@ -373,7 +392,7 @@ mod tests {
             },
         };
         let runner = FakeRunner::new(vec![FakeResponse::empty(), FakeResponse::empty()]);
-        let err = run_review(&runner, spec(f.out.clone(), f.work.clone()), &ctx)
+        let err = run_review(&runner, spec(f.out.clone(), f.work.clone()), &ctx, None)
             .await
             .unwrap_err();
         assert!(err.to_string().contains("не создан"), "{err}");
@@ -397,7 +416,7 @@ mod tests {
             stderr: String::new(),
             timed_out: true,
         })]);
-        let err = run_review(&runner, spec(f.out.clone(), f.work.clone()), &ctx)
+        let err = run_review(&runner, spec(f.out.clone(), f.work.clone()), &ctx, None)
             .await
             .unwrap_err();
 
@@ -423,7 +442,7 @@ mod tests {
             stderr: "401 invalid api key\n".into(),
             timed_out: false,
         })]);
-        let err = run_review(&runner, spec(f.out.clone(), f.work.clone()), &ctx)
+        let err = run_review(&runner, spec(f.out.clone(), f.work.clone()), &ctx, None)
             .await
             .unwrap_err();
 
@@ -449,7 +468,7 @@ mod tests {
         )]);
         let mut spec = spec(f.out.clone(), f.work.clone());
         spec.mount = Mount::ReadWrite;
-        let step = run_patch(&runner, spec, &ctx).await.unwrap();
+        let step = run_patch(&runner, spec, &ctx, None).await.unwrap();
 
         assert_eq!(step.summary.as_deref(), Some("перевёл одну статью"));
         assert!(f.work.join("posts/a.en.mdx").exists());
@@ -468,7 +487,7 @@ mod tests {
             },
         };
         let runner = FakeRunner::new(vec![FakeResponse::empty()]);
-        let step = run_patch(&runner, spec(f.out.clone(), f.work.clone()), &ctx)
+        let step = run_patch(&runner, spec(f.out.clone(), f.work.clone()), &ctx, None)
             .await
             .unwrap();
         assert!(step.summary.is_none());

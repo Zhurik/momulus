@@ -4,12 +4,13 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use llm_bot_core::{
-    AckState, Error, Finding, JobRef, Patch, PrRef, Publisher, Result, config::GithubConfig,
+    AckState, Error, Finding, GitAccess, JobRef, Patch, PrRef, Publisher, Result,
+    config::GithubConfig,
 };
 use llm_bot_workspace::Git;
-use octocrab::Octocrab;
 use url::Url;
 
+use crate::app::ClientProvider;
 use crate::backoff::Backoff;
 use crate::error::from_octocrab;
 use crate::models::{
@@ -22,41 +23,12 @@ const SUGGESTION_FENCE: &str = "suggestion";
 
 /// Реализация [`Publisher`] для GitHub.
 pub struct GithubPublisher {
-    client: Octocrab,
+    clients: Arc<dyn ClientProvider>,
     git: Git,
     config: GithubConfig,
     backoff: Backoff,
-    /// Installation-токен для git push; берётся лениво.
-    token: Arc<dyn TokenSource>,
-}
-
-/// Откуда брать installation-токен для git-операций.
-#[async_trait]
-pub trait TokenSource: Send + Sync {
-    async fn token(&self) -> Result<String>;
-}
-
-/// Токен, выданный заранее (используется в тестах и в одноразовых операциях).
-pub struct StaticToken(pub String);
-
-#[async_trait]
-impl TokenSource for StaticToken {
-    async fn token(&self) -> Result<String> {
-        Ok(self.0.clone())
-    }
-}
-
-/// Токен установки через [`crate::AppAuth`].
-pub struct InstallationToken {
-    pub auth: Arc<crate::AppAuth>,
-    pub installation_id: u64,
-}
-
-#[async_trait]
-impl TokenSource for InstallationToken {
-    async fn token(&self) -> Result<String> {
-        self.auth.installation_token(self.installation_id).await
-    }
+    /// Откуда берём токен для git push.
+    access: Arc<dyn GitAccess>,
 }
 
 impl std::fmt::Debug for GithubPublisher {
@@ -69,17 +41,17 @@ impl std::fmt::Debug for GithubPublisher {
 
 impl GithubPublisher {
     pub fn new(
-        client: Octocrab,
+        clients: Arc<dyn ClientProvider>,
         git: Git,
         config: GithubConfig,
-        token: Arc<dyn TokenSource>,
+        access: Arc<dyn GitAccess>,
     ) -> GithubPublisher {
         GithubPublisher {
-            client,
+            clients,
             git,
             config,
             backoff: Backoff::default(),
-            token,
+            access,
         }
     }
 
@@ -118,10 +90,16 @@ impl GithubPublisher {
     }
 
     /// POST без разбора ответа.
-    async fn post_empty<B: serde::Serialize + Sync>(&self, route: &str, body: &B) -> Result<()> {
+    async fn post_empty<B: serde::Serialize + Sync>(
+        &self,
+        pr: &PrRef,
+        route: &str,
+        body: &B,
+    ) -> Result<()> {
+        let client = self.clients.client(pr).await?;
         self.backoff
             .retry(route, || async {
-                self.client
+                client
                     .post::<_, serde_json::Value>(route, Some(body))
                     .await
                     .map_err(from_octocrab)
@@ -143,13 +121,13 @@ impl GithubPublisher {
     }
 
     /// Ветка, свободная на remote: при коллизии добавляем короткий SHA.
-    async fn free_branch(&self, pr: &PrRef, wanted: &str, token: &str) -> Result<String> {
+    async fn free_branch(&self, pr: &PrRef, wanted: &str, token: Option<&str>) -> Result<String> {
         let remote = pr.clone_url.clone();
         let exists = |name: &str| {
             let remote = remote.clone();
             let name = name.to_string();
             let git = self.git.clone();
-            let token = token.to_string();
+            let token = token.map(str::to_string);
             async move {
                 let out = git
                     .run_with_token(
@@ -160,7 +138,7 @@ impl GithubPublisher {
                             &remote,
                             &format!("refs/heads/{name}"),
                         ],
-                        Some(&token),
+                        token.as_deref(),
                     )
                     .await?;
                 Ok::<bool, Error>(!out.stdout.trim().is_empty())
@@ -194,7 +172,8 @@ impl Publisher for GithubPublisher {
             AckState::Failed => "-1",
         };
         let route = GithubPublisher::reactions_route(&job.pr, job);
-        self.post_empty(&route, &ReactionRequest { content }).await
+        self.post_empty(&job.pr, &route, &ReactionRequest { content })
+            .await
     }
 
     async fn post_review(&self, pr: &PrRef, findings: &[Finding], summary: &str) -> Result<()> {
@@ -203,7 +182,7 @@ impl Publisher for GithubPublisher {
             pr.owner, pr.repo, pr.number
         );
         let body = GithubPublisher::review_request(pr, findings, summary);
-        self.post_empty(&route, &body).await
+        self.post_empty(pr, &route, &body).await
     }
 
     async fn push_and_open_pr(&self, pr: &PrRef, patch: &Patch) -> Result<Url> {
@@ -214,7 +193,7 @@ impl Publisher for GithubPublisher {
             )));
         }
 
-        let token = self.token.token().await?;
+        let token = self.access.git_token(pr).await?;
         let worktree = patch.worktree.as_path();
 
         // Коммит делает оркестратор: агент git не касается.
@@ -235,7 +214,9 @@ impl Publisher for GithubPublisher {
             )
             .await?;
 
-        let branch = self.free_branch(pr, &patch.branch, &token).await?;
+        let branch = self
+            .free_branch(pr, &patch.branch, token.as_deref())
+            .await?;
         self.git
             .run_with_token(
                 Some(worktree),
@@ -245,7 +226,7 @@ impl Publisher for GithubPublisher {
                     &pr.clone_url,
                     &format!("HEAD:refs/heads/{branch}"),
                 ],
-                Some(&token),
+                token.as_deref(),
             )
             .await?;
 
@@ -258,10 +239,11 @@ impl Publisher for GithubPublisher {
             body: patch.body.clone(),
             maintainer_can_modify: true,
         };
+        let client = self.clients.client(pr).await?;
         let created: CreatedPullRequest = self
             .backoff
             .retry(&route, || async {
-                self.client
+                client
                     .post::<_, CreatedPullRequest>(&route, Some(&body))
                     .await
                     .map_err(from_octocrab)
@@ -278,6 +260,7 @@ impl Publisher for GithubPublisher {
             pr.owner, pr.repo, pr.number
         );
         self.post_empty(
+            pr,
             &route,
             &CommentRequest {
                 body: body.to_string(),

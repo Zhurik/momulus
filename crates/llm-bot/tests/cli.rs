@@ -259,3 +259,71 @@ fn run_fails_when_skill_produced_no_findings_file() {
         .failure()
         .stderr(contains("findings.json"));
 }
+
+#[test]
+fn serve_reports_missing_config() {
+    Command::cargo_bin("llm-bot")
+        .unwrap()
+        .args(["--config", "/definitely/not/here.toml", "serve"])
+        .assert()
+        .failure()
+        .stderr(contains("конфиг"));
+}
+
+#[test]
+fn serve_reports_missing_github_secrets() {
+    let tmp = tempfile::tempdir().unwrap();
+    let skills = tmp.path().join("skills");
+    fixture_skills(&skills, false);
+    let config = tmp.path().join("config.toml");
+    std::fs::write(
+        &config,
+        format!(
+            "allowed_users = [\"zhurik\"]\ndata_dir = {:?}\n",
+            tmp.path().join("data").to_string_lossy()
+        ),
+    )
+    .unwrap();
+
+    Command::cargo_bin("llm-bot")
+        .unwrap()
+        .args([
+            "--config",
+            config.to_str().unwrap(),
+            "--skills-dir",
+            skills.to_str().unwrap(),
+            "serve",
+        ])
+        // Переменные секретов заведомо пусты.
+        .env_remove("GITHUB_APP_ID")
+        .env_remove("GITHUB_APP_PRIVATE_KEY_PATH")
+        .env("LLM_API_KEY", "test-key")
+        .env("LLM_BASE_URL", "https://foundation-models.api.cloud.ru/v1")
+        .assert()
+        .failure()
+        .stderr(contains("GITHUB_APP_ID"));
+}
+
+#[test]
+fn serve_requires_base_url_for_custom_provider() {
+    let tmp = tempfile::tempdir().unwrap();
+    let skills = tmp.path().join("skills");
+    fixture_skills(&skills, false);
+    let config = tmp.path().join("config.toml");
+    std::fs::write(
+        &config,
+        format!(
+            "allowed_users = [\"zhurik\"]\ndata_dir = {:?}\n",
+            tmp.path().join("data").to_string_lossy()
+        ),
+    )
+    .unwrap();
+
+    Command::cargo_bin("llm-bot")
+        .unwrap()
+        .args(["--config", config.to_str().unwrap(), "serve"])
+        .env_remove("LLM_BASE_URL")
+        .assert()
+        .failure()
+        .stderr(contains("LLM_BASE_URL"));
+}

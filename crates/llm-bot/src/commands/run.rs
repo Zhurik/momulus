@@ -7,8 +7,8 @@ use anyhow::{Context, Result, bail};
 use llm_bot_core::{Args as CommandArgs, Config, JobId, Mount, RunSpec, Runner, Secrets};
 use llm_bot_pipeline::prompt::{Origin, PromptContext};
 use llm_bot_pipeline::{
-    FakeRunner, JobContext, check_input, combined_log, measure_files, prepare_review, render,
-    run_patch, run_review,
+    FakeRunner, JobContext, check_input, measure_files, prepare_review, render, run_patch,
+    run_review,
 };
 use llm_bot_runner_docker::{DockerRunner, models_json};
 use llm_bot_skills::{Mode, Registry, Skill};
@@ -92,9 +92,9 @@ pub async fn run(cli: &Cli, args: &RunArgs) -> Result<()> {
 
     match skill.contract.mode {
         Mode::Review => {
-            let step = run_review(runner.as_ref(), spec, &prompt_ctx).await;
+            let step =
+                run_review(runner.as_ref(), spec, &prompt_ctx, Some(log_path.as_path())).await;
             let step = finish(step, &log_path)?;
-            std::fs::write(&log_path, combined_log(&step.runs))?;
             print_runs(&step.runs);
 
             let result = prepare_review(
@@ -130,9 +130,9 @@ pub async fn run(cli: &Cli, args: &RunArgs) -> Result<()> {
             );
         }
         Mode::Patch => {
-            let step = run_patch(runner.as_ref(), spec, &prompt_ctx).await;
+            let step =
+                run_patch(runner.as_ref(), spec, &prompt_ctx, Some(log_path.as_path())).await;
             let step = finish(step, &log_path)?;
-            std::fs::write(&log_path, combined_log(&step.runs))?;
             print_runs(&step.runs);
 
             match &step.summary {
