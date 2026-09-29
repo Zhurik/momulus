@@ -9,17 +9,17 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use llm_bot_core::config::{GithubConfig, Limits};
-use llm_bot_core::{
+use momulus_core::config::{GithubConfig, Limits};
+use momulus_core::{
     AckState, Error, Job, JobStatus, LocalGitAccess, MemoryCursorStore, Result, StaticSkillCatalog,
 };
-use llm_bot_github::backoff::Backoff;
-use llm_bot_github::trigger::ClientSource;
-use llm_bot_github::{GithubPublisher, GithubTrigger, TriggerConfig};
-use llm_bot_pipeline::fake::{FakeResponse, FakeRunner};
-use llm_bot_pipeline::{Outcome, Pipeline, PipelineConfig, SharedRegistry};
-use llm_bot_queue::{Db, JobHandler, Store, Worker, WorkerConfig};
-use llm_bot_workspace::{Git, RepoCache};
+use momulus_github::backoff::Backoff;
+use momulus_github::trigger::ClientSource;
+use momulus_github::{GithubPublisher, GithubTrigger, TriggerConfig};
+use momulus_pipeline::fake::{FakeResponse, FakeRunner};
+use momulus_pipeline::{Outcome, Pipeline, PipelineConfig, SharedRegistry};
+use momulus_queue::{Db, JobHandler, Store, Worker, WorkerConfig};
+use momulus_workspace::{Git, RepoCache};
 use octocrab::Octocrab;
 use serde_json::json;
 use tokio::sync::mpsc;
@@ -200,7 +200,7 @@ fn pipeline(
 ) -> Arc<Pipeline> {
     let publisher = Arc::new(
         GithubPublisher::new(
-            Arc::new(llm_bot_github::FixedClient(client(server))),
+            Arc::new(momulus_github::FixedClient(client(server))),
             Git::default(),
             GithubConfig::default(),
             Arc::new(LocalGitAccess),
@@ -223,7 +223,7 @@ fn pipeline(
             api_key_env: "CLOUDRU_API_KEY".into(),
             api_key: Some("test-key".into()),
             base_url: None,
-            image: "llm-bot-runner:latest".into(),
+            image: "momulus-runner:latest".into(),
             cpu: 1.0,
             memory_mb: 512,
             limits: Limits::default(),

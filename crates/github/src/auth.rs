@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
-use llm_bot_core::{Error, Result};
+use momulus_core::{Error, Result};
 use octocrab::Octocrab;
 use octocrab::models::{AppId, InstallationId};
 use tokio::sync::Mutex;

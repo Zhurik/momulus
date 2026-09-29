@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
-use llm_bot_core::{
+use momulus_core::{
     Command, CommandParseError, CursorStore, Error, Job, PrRef, Result, SkillCatalog, Trigger,
 };
 use octocrab::Octocrab;
@@ -288,7 +288,7 @@ impl GithubTrigger {
         pr_number: u64,
         body: &str,
         author: &str,
-        comment: llm_bot_core::CommentRef,
+        comment: momulus_core::CommentRef,
     ) -> Result<Option<Job>> {
         let parsed = match Command::parse(body) {
             Ok(command) => Ok(command),

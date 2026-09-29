@@ -3,11 +3,11 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use llm_bot_core::config::{Limits, ProviderApi};
-use llm_bot_core::{
+use momulus_core::config::{Limits, ProviderApi};
+use momulus_core::{
     AckState, Error, GitAccess, Job, JobId, Mount, Publisher, Result, RunSpec, Runner,
 };
-use llm_bot_workspace::RepoCache;
+use momulus_workspace::RepoCache;
 use url::Url;
 
 use crate::limits::{check_input, measure_files};
@@ -16,7 +16,7 @@ use crate::registry::SharedRegistry;
 use crate::render::{self, JobContext};
 use crate::steps::{collect_patch, run_patch, run_review};
 use crate::validate::prepare_review;
-use llm_bot_skills::Mode;
+use momulus_skills::Mode;
 
 /// Настройки запуска, одинаковые для всех джоб.
 #[derive(Debug, Clone)]
@@ -154,7 +154,7 @@ impl Pipeline {
             .cache
             .pr_diff(&bare, &self.access.base_rev(&job.pr), &job.pr.head_sha)
             .await?;
-        let diff = llm_bot_workspace::DiffIndex::parse(&diff_text)?;
+        let diff = momulus_workspace::DiffIndex::parse(&diff_text)?;
         let files = skill.contract.select_files(diff.reviewable_files())?;
 
         if files.is_empty() {
@@ -246,7 +246,7 @@ impl Pipeline {
                     branch,
                     render::pr_title(&skill.name, job.pr.number, &args),
                     body,
-                    format!("llm-bot: {} для #{}", skill.name, job.pr.number),
+                    format!("momulus: {} для #{}", skill.name, job.pr.number),
                 )
                 .await?;
 
@@ -309,7 +309,7 @@ impl Pipeline {
     fn run_spec(
         &self,
         job_id: JobId,
-        skill: &llm_bot_skills::Skill,
+        skill: &momulus_skills::Skill,
         workdir: PathBuf,
         out_dir: PathBuf,
     ) -> Result<RunSpec> {

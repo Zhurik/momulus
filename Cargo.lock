@@ -1486,151 +1486,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "47d9d19d1d6efa0109d2f65ff4c85cddd50bd572e5a00127ab10987290bcefae"
 
 [[package]]
-name = "llm-bot"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "assert_cmd",
- "async-trait",
- "clap",
- "llm-bot-core",
- "llm-bot-github",
- "llm-bot-pipeline",
- "llm-bot-queue",
- "llm-bot-runner-docker",
- "llm-bot-skills",
- "llm-bot-workspace",
- "predicates",
- "tempfile",
- "tokio",
- "tokio-util",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "llm-bot-core"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "chrono",
- "humantime-serde",
- "insta",
- "schemars",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror",
- "tokio",
- "tokio-util",
- "toml",
- "url",
- "uuid",
-]
-
-[[package]]
-name = "llm-bot-github"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "chrono",
- "futures",
- "insta",
- "jsonwebtoken",
- "llm-bot-core",
- "llm-bot-workspace",
- "octocrab",
- "rand 0.10.3",
- "secrecy",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
- "tokio-util",
- "tracing",
- "url",
- "wiremock",
-]
-
-[[package]]
-name = "llm-bot-pipeline"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "insta",
- "llm-bot-core",
- "llm-bot-github",
- "llm-bot-queue",
- "llm-bot-skills",
- "llm-bot-workspace",
- "octocrab",
- "schemars",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
- "tokio-util",
- "tracing",
- "url",
- "wiremock",
-]
-
-[[package]]
-name = "llm-bot-queue"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "chrono",
- "llm-bot-core",
- "serde",
- "serde_json",
- "sqlx",
- "tempfile",
- "thiserror",
- "tokio",
- "tokio-util",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "llm-bot-runner-docker"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "bollard",
- "futures",
- "llm-bot-core",
- "serde_json",
- "tempfile",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "llm-bot-skills"
-version = "0.1.0"
-dependencies = [
- "globset",
- "humantime-serde",
- "llm-bot-core",
- "serde",
- "tempfile",
- "thiserror",
- "toml",
-]
-
-[[package]]
-name = "llm-bot-workspace"
-version = "0.1.0"
-dependencies = [
- "llm-bot-core",
- "tempfile",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "lock_api"
 version = "0.4.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1679,6 +1534,151 @@ dependencies = [
  "libc",
  "wasi",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "momulus"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "assert_cmd",
+ "async-trait",
+ "clap",
+ "momulus-core",
+ "momulus-github",
+ "momulus-pipeline",
+ "momulus-queue",
+ "momulus-runner-docker",
+ "momulus-skills",
+ "momulus-workspace",
+ "predicates",
+ "tempfile",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "momulus-core"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "humantime-serde",
+ "insta",
+ "schemars",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "toml",
+ "url",
+ "uuid",
+]
+
+[[package]]
+name = "momulus-github"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "futures",
+ "insta",
+ "jsonwebtoken",
+ "momulus-core",
+ "momulus-workspace",
+ "octocrab",
+ "rand 0.10.3",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "url",
+ "wiremock",
+]
+
+[[package]]
+name = "momulus-pipeline"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "insta",
+ "momulus-core",
+ "momulus-github",
+ "momulus-queue",
+ "momulus-skills",
+ "momulus-workspace",
+ "octocrab",
+ "schemars",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "url",
+ "wiremock",
+]
+
+[[package]]
+name = "momulus-queue"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "momulus-core",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "momulus-runner-docker"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bollard",
+ "futures",
+ "momulus-core",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "momulus-skills"
+version = "0.1.0"
+dependencies = [
+ "globset",
+ "humantime-serde",
+ "momulus-core",
+ "serde",
+ "tempfile",
+ "thiserror",
+ "toml",
+]
+
+[[package]]
+name = "momulus-workspace"
+version = "0.1.0"
+dependencies = [
+ "momulus-core",
+ "tempfile",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

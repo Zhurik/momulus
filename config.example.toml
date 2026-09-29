@@ -1,4 +1,4 @@
-# Пример конфигурации llm-bot. Секреты сюда не кладём — они приходят из окружения:
+# Пример конфигурации momulus. Секреты сюда не кладём — они приходят из окружения:
 #   GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY_PATH, LLM_API_KEY, LLM_BASE_URL.
 
 # Как часто опрашиваем GitHub на новые команды.
@@ -16,10 +16,10 @@ repos = []
 # Данные сервиса: SQLite, кэш репозиториев, worktree, логи джоб.
 # В docker-compose путь должен совпадать с хостовым (см. README): демон монтирует
 # рабочую копию в контейнер с pi и понимает только хостовые пути.
-data_dir = "/srv/llm-bot/data"
+data_dir = "/srv/momulus/data"
 
 # Каталог со скиллами (SKILL.md + skill.toml). Тоже монтируется в контейнер.
-skills_dir = "/srv/llm-bot/skills"
+skills_dir = "/srv/momulus/skills"
 
 # Сколько ждём завершения текущих джоб при остановке.
 shutdown_timeout = "5m"
@@ -31,7 +31,7 @@ default_provider = "cloudru"
 default_model = "zai-org/GLM-5.1"
 
 # Протокол провайдера. Задавать нужно только для провайдеров, которых нет среди
-# встроенных в pi: тогда llm-bot опишет его в models.json контейнера, а base URL
+# встроенных в pi: тогда momulus опишет его в models.json контейнера, а base URL
 # возьмёт из LLM_BASE_URL (для Cloud.ru — https://foundation-models.api.cloud.ru/v1).
 # Для встроенного провайдера (anthropic, openai, google, ...) поле нужно убрать.
 api = "openai-completions"
@@ -41,7 +41,7 @@ api = "openai-completions"
 # api_key_env = "CLOUDRU_API_KEY"
 
 [docker]
-runner_image = "llm-bot-runner:latest"
+runner_image = "momulus-runner:latest"
 cpu = 2.0
 memory_mb = 2048
 # host = "unix:///var/run/docker.sock"
@@ -51,8 +51,8 @@ memory_mb = 2048
 
 [github]
 api_base = "https://api.github.com"
-bot_name = "llm-bot"
-bot_email = "llm-bot@users.noreply.github.com"
+bot_name = "momulus"
+bot_email = "momulus@users.noreply.github.com"
 
 [limits]
 # Слишком большой PR — отказ с комментарием, без вызова LLM.

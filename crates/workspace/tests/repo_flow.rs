@@ -3,7 +3,7 @@
 use std::path::Path;
 use std::process::Command;
 
-use llm_bot_workspace::{Git, RepoCache};
+use momulus_workspace::{Git, RepoCache};
 
 /// Запускает git в тестовом репозитории.
 fn git(dir: &Path, args: &[&str]) -> String {

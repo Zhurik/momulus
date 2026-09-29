@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use llm_bot_core::{GitAccess, PrRef, Result};
+use momulus_core::{GitAccess, PrRef, Result};
 use octocrab::Octocrab;
 use tokio::sync::Mutex;
 

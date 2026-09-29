@@ -1,10 +1,10 @@
-//! `llm-bot skills list|validate`.
+//! `momulus skills list|validate`.
 
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use llm_bot_core::Config;
-use llm_bot_skills::Registry;
+use momulus_core::Config;
+use momulus_skills::Registry;
 
 use crate::cli::{Cli, SkillsCommand};
 

@@ -3,8 +3,8 @@
 use std::path::Path;
 use std::process::Command;
 
-use llm_bot_pipeline::collect_patch;
-use llm_bot_workspace::{Git, RepoCache};
+use momulus_pipeline::collect_patch;
+use momulus_workspace::{Git, RepoCache};
 
 fn git(dir: &Path, args: &[&str]) -> String {
     let out = Command::new("git")
@@ -74,9 +74,9 @@ async fn collects_changes_made_in_the_worktree() {
     let patch = collect_patch(
         &worktree,
         "llm/translate-en-42".into(),
-        "llm-bot: translate для #42".into(),
+        "momulus: translate для #42".into(),
         "тело PR".into(),
-        "llm-bot: перевод".into(),
+        "momulus: перевод".into(),
     )
     .await
     .unwrap()

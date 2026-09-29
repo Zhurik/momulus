@@ -1,22 +1,22 @@
 [package]
-name = "llm-bot"
+name = "momulus"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
 rust-version.workspace = true
 
 [[bin]]
-name = "llm-bot"
+name = "momulus"
 path = "src/main.rs"
 
 [dependencies]
-llm-bot-core.workspace = true
-llm-bot-queue.workspace = true
-llm-bot-skills.workspace = true
-llm-bot-pipeline.workspace = true
-llm-bot-runner-docker.workspace = true
-llm-bot-workspace.workspace = true
-llm-bot-github.workspace = true
+momulus-core.workspace = true
+momulus-queue.workspace = true
+momulus-skills.workspace = true
+momulus-pipeline.workspace = true
+momulus-runner-docker.workspace = true
+momulus-workspace.workspace = true
+momulus-github.workspace = true
 async-trait.workspace = true
 tokio-util.workspace = true
 anyhow.workspace = true

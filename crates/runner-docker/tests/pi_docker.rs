@@ -1,4 +1,4 @@
-//! Тесты, которым нужен настоящий Docker и образ llm-bot-runner с pi.
+//! Тесты, которым нужен настоящий Docker и образ momulus-runner с pi.
 //!
 //! Запуск: `just test-integration` (или `cargo test -- --ignored`).
 //! Без `LLM_API_KEY` тест сообщает об этом и завершается успешно.
@@ -6,9 +6,9 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use llm_bot_core::config::{ProviderApi, provider_key_env};
-use llm_bot_core::{JobId, Mount, Redactor, RunSpec, Runner};
-use llm_bot_runner_docker::{DockerRunner, models_json};
+use momulus_core::config::{ProviderApi, provider_key_env};
+use momulus_core::{JobId, Mount, Redactor, RunSpec, Runner};
+use momulus_runner_docker::{DockerRunner, models_json};
 
 fn skills_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../skills")
@@ -54,7 +54,7 @@ async fn runs_proofread_with_real_pi() {
 
     let runner = DockerRunner::connect(
         None,
-        std::env::var("LLM_BOT_CONTAINER_USER").ok(),
+        std::env::var("MOMULUS_CONTAINER_USER").ok(),
         Redactor::new().with_secret(api_key.clone()),
     )
     .expect("docker доступен");
@@ -77,8 +77,8 @@ async fn runs_proofread_with_real_pi() {
         provider: provider.clone(),
         model: Some(model),
         timeout: Duration::from_secs(600),
-        image: std::env::var("LLM_BOT_RUNNER_IMAGE")
-            .unwrap_or_else(|_| "llm-bot-runner:latest".to_string()),
+        image: std::env::var("MOMULUS_RUNNER_IMAGE")
+            .unwrap_or_else(|_| "momulus-runner:latest".to_string()),
         cpu_limit: 2.0,
         memory_limit_mb: 2048,
         env: vec![(key_env, api_key)],
@@ -93,7 +93,7 @@ async fn runs_proofread_with_real_pi() {
 
     let findings = out.join("findings.json");
     assert!(findings.exists(), "pi записал /out/findings.json");
-    let parsed: llm_bot_core::ReviewOutput =
+    let parsed: momulus_core::ReviewOutput =
         serde_json::from_str(&std::fs::read_to_string(&findings).unwrap())
             .expect("валидный JSON по схеме");
     assert!(!parsed.summary.is_empty());
@@ -124,8 +124,8 @@ async fn kills_container_on_timeout() {
         provider: "anthropic".into(),
         model: None,
         timeout: Duration::from_millis(1),
-        image: std::env::var("LLM_BOT_RUNNER_IMAGE")
-            .unwrap_or_else(|_| "llm-bot-runner:latest".to_string()),
+        image: std::env::var("MOMULUS_RUNNER_IMAGE")
+            .unwrap_or_else(|_| "momulus-runner:latest".to_string()),
         cpu_limit: 1.0,
         memory_limit_mb: 512,
         env: Vec::new(),

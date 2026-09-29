@@ -1,4 +1,4 @@
-# Разворачивание llm-bot на одной машине.
+# Разворачивание momulus на одной машине.
 #
 # Пути на хосте и в контейнере СОВПАДАЮТ намеренно: сервис просит docker-демон
 # смонтировать рабочую копию в контейнер с pi, а демон живёт на хосте и видит
@@ -6,35 +6,35 @@
 # путями и монтируются «сами в себя».
 #
 # Перед первым запуском:
-#   export LLM_BOT_ROOT=/srv/llm-bot         # где лежат data/, skills/, config.toml
-#   mkdir -p $LLM_BOT_ROOT/{data,secrets}
-#   cp config.example.toml $LLM_BOT_ROOT/config.toml
-#   cp -r skills $LLM_BOT_ROOT/skills
-#   cp ~/github-app.private-key.pem $LLM_BOT_ROOT/secrets/github-app.pem
+#   export MOMULUS_ROOT=/srv/momulus         # где лежат data/, skills/, config.toml
+#   mkdir -p $MOMULUS_ROOT/{data,secrets}
+#   cp config.example.toml $MOMULUS_ROOT/config.toml
+#   cp -r skills $MOMULUS_ROOT/skills
+#   cp ~/github-app.private-key.pem $MOMULUS_ROOT/secrets/github-app.pem
 #   docker compose --profile build build     # собрать образ раннера с pi
 #   docker compose up -d
 
-x-root: &root ${LLM_BOT_ROOT:-/srv/llm-bot}
+x-root: &root ${MOMULUS_ROOT:-/srv/momulus}
 
 services:
-  llm-bot:
+  momulus:
     build:
       context: .
       dockerfile: docker/Dockerfile
-    image: llm-bot:latest
+    image: momulus:latest
     restart: unless-stopped
     # Нужен доступ к docker-демону: сервис запускает контейнеры с pi на каждую
     # джобу. Это фактически права root на хосте — в README описан вариант
     # с docker-socket-proxy, который сужает набор разрешённых эндпоинтов.
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ${LLM_BOT_ROOT:-/srv/llm-bot}/data:${LLM_BOT_ROOT:-/srv/llm-bot}/data
-      - ${LLM_BOT_ROOT:-/srv/llm-bot}/skills:${LLM_BOT_ROOT:-/srv/llm-bot}/skills:ro
-      - ${LLM_BOT_ROOT:-/srv/llm-bot}/config.toml:/etc/llm-bot/config.toml:ro
+      - ${MOMULUS_ROOT:-/srv/momulus}/data:${MOMULUS_ROOT:-/srv/momulus}/data
+      - ${MOMULUS_ROOT:-/srv/momulus}/skills:${MOMULUS_ROOT:-/srv/momulus}/skills:ro
+      - ${MOMULUS_ROOT:-/srv/momulus}/config.toml:/etc/momulus/config.toml:ro
     secrets:
       - github_app_key
     environment:
-      LLM_BOT_CONFIG: /etc/llm-bot/config.toml
+      MOMULUS_CONFIG: /etc/momulus/config.toml
       GITHUB_APP_ID: ${GITHUB_APP_ID:?нужен id GitHub App}
       GITHUB_APP_PRIVATE_KEY_PATH: /run/secrets/github_app_key
       LLM_API_KEY: ${LLM_API_KEY:?нужен ключ LLM-провайдера}
@@ -52,10 +52,10 @@ services:
       dockerfile: docker/Dockerfile.runner
       args:
         PI_VERSION: ${PI_VERSION:-0.87.1}
-    image: llm-bot-runner:latest
+    image: momulus-runner:latest
     profiles: ["build"]
     command: ["pi", "--version"]
 
 secrets:
   github_app_key:
-    file: ${LLM_BOT_ROOT:-/srv/llm-bot}/secrets/github-app.pem
+    file: ${MOMULUS_ROOT:-/srv/momulus}/secrets/github-app.pem

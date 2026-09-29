@@ -8,7 +8,7 @@ members = [
     "crates/runner-docker",
     "crates/github",
     "crates/queue",
-    "crates/llm-bot",
+    "crates/momulus",
 ]
 
 [workspace.package]
@@ -18,13 +18,13 @@ license = "MIT"
 rust-version = "1.85"
 
 [workspace.dependencies]
-llm-bot-core = { path = "crates/core" }
-llm-bot-skills = { path = "crates/skills" }
-llm-bot-workspace = { path = "crates/workspace" }
-llm-bot-queue = { path = "crates/queue" }
-llm-bot-pipeline = { path = "crates/pipeline" }
-llm-bot-runner-docker = { path = "crates/runner-docker" }
-llm-bot-github = { path = "crates/github" }
+momulus-core = { path = "crates/core" }
+momulus-skills = { path = "crates/skills" }
+momulus-workspace = { path = "crates/workspace" }
+momulus-queue = { path = "crates/queue" }
+momulus-pipeline = { path = "crates/pipeline" }
+momulus-runner-docker = { path = "crates/runner-docker" }
+momulus-github = { path = "crates/github" }
 
 anyhow = "1.0.104"
 async-trait = "0.1.92"

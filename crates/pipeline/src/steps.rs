@@ -2,8 +2,8 @@
 
 use std::path::Path;
 
-use llm_bot_core::{Error, Patch, Result, ReviewOutput, RunResult, RunSpec, Runner};
-use llm_bot_workspace::Worktree;
+use momulus_core::{Error, Patch, Result, ReviewOutput, RunResult, RunSpec, Runner};
+use momulus_workspace::Worktree;
 
 use crate::prompt::{FINDINGS_FILE, PromptContext, SUMMARY_FILE};
 use crate::validate::parse_review;
@@ -198,8 +198,8 @@ mod tests {
     use super::*;
     use crate::fake::{FakeResponse, FakeRunner};
     use crate::prompt::Origin;
-    use llm_bot_core::{JobId, Mount};
-    use llm_bot_skills::{Skill, SkillContract, SkillDoc};
+    use momulus_core::{JobId, Mount};
+    use momulus_skills::{Skill, SkillContract, SkillDoc};
     use std::collections::BTreeMap;
     use std::path::PathBuf;
     use std::time::Duration;
@@ -234,7 +234,7 @@ mod tests {
             provider: "cloudru".into(),
             model: Some("zai-org/GLM-5.1".into()),
             timeout: Duration::from_secs(60),
-            image: "llm-bot-runner:latest".into(),
+            image: "momulus-runner:latest".into(),
             cpu_limit: 1.0,
             memory_limit_mb: 512,
             env: Vec::new(),

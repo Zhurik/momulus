@@ -229,7 +229,7 @@ impl SkillContract {
     pub fn resolve_args(
         &self,
         skill: &str,
-        args: &llm_bot_core::Args,
+        args: &momulus_core::Args,
     ) -> SkillResult<BTreeMap<String, String>> {
         let fail = |message: String| SkillError::Args {
             skill: skill.to_string(),
@@ -357,7 +357,7 @@ fn compact_toml_error(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use llm_bot_core::Command;
+    use momulus_core::Command;
 
     const REVIEW: &str = r#"
         mode = "review"

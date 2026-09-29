@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
-use llm_bot_core::{
+use momulus_core::{
     Args, Command, CommentKind, CommentRef, Error, Job, JobId, JobStatus, PrRef, Result,
 };
 use sqlx::Row;
@@ -370,7 +370,7 @@ mod tests {
     #[tokio::test]
     async fn running_jobs_are_recovered_after_restart() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("llm-bot.sqlite");
+        let path = dir.path().join("momulus.sqlite");
         let job = job(1001, "/llm proofread");
         {
             let store = Store::new(Db::open(&path).await.unwrap());

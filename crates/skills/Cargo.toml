@@ -1,12 +1,12 @@
 [package]
-name = "llm-bot-skills"
+name = "momulus-skills"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-llm-bot-core.workspace = true
+momulus-core.workspace = true
 globset.workspace = true
 humantime-serde.workspace = true
 serde.workspace = true

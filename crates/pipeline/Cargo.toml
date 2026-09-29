@@ -1,14 +1,14 @@
 [package]
-name = "llm-bot-pipeline"
+name = "momulus-pipeline"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-llm-bot-core.workspace = true
-llm-bot-skills.workspace = true
-llm-bot-workspace.workspace = true
+momulus-core.workspace = true
+momulus-skills.workspace = true
+momulus-workspace.workspace = true
 async-trait.workspace = true
 schemars.workspace = true
 serde.workspace = true
@@ -18,8 +18,8 @@ tracing.workspace = true
 url.workspace = true
 
 [dev-dependencies]
-llm-bot-github.workspace = true
-llm-bot-queue.workspace = true
+momulus-github.workspace = true
+momulus-queue.workspace = true
 async-trait.workspace = true
 insta.workspace = true
 octocrab.workspace = true

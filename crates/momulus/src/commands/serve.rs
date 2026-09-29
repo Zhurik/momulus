@@ -1,16 +1,16 @@
-//! `llm-bot serve` — основной режим: опрос платформы и выполнение джоб.
+//! `momulus serve` — основной режим: опрос платформы и выполнение джоб.
 
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use llm_bot_core::{AckState, Config, Error, GitAccess, Job, Publisher, Runner, Secrets, Trigger};
-use llm_bot_github::trigger::ClientSource;
-use llm_bot_github::{AppAuth, GithubApp, GithubPublisher, GithubTrigger, TriggerConfig};
-use llm_bot_pipeline::{Outcome, Pipeline, PipelineConfig, SharedRegistry, StdoutPublisher};
-use llm_bot_queue::{Db, JobHandler, Store, Worker, WorkerConfig};
-use llm_bot_runner_docker::DockerRunner;
-use llm_bot_workspace::{Git, RepoCache};
+use momulus_core::{AckState, Config, Error, GitAccess, Job, Publisher, Runner, Secrets, Trigger};
+use momulus_github::trigger::ClientSource;
+use momulus_github::{AppAuth, GithubApp, GithubPublisher, GithubTrigger, TriggerConfig};
+use momulus_pipeline::{Outcome, Pipeline, PipelineConfig, SharedRegistry, StdoutPublisher};
+use momulus_queue::{Db, JobHandler, Store, Worker, WorkerConfig};
+use momulus_runner_docker::DockerRunner;
+use momulus_workspace::{Git, RepoCache};
 use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -204,7 +204,7 @@ struct PipelineHandler {
 
 #[async_trait]
 impl JobHandler for PipelineHandler {
-    async fn handle(&self, job: &Job) -> llm_bot_core::Result<()> {
+    async fn handle(&self, job: &Job) -> momulus_core::Result<()> {
         let result = self.pipeline.execute(job).await?;
         match &result.outcome {
             Outcome::Review { findings } => {
@@ -222,11 +222,11 @@ impl JobHandler for PipelineHandler {
         Ok(())
     }
 
-    async fn ack(&self, job: &Job, state: AckState) -> llm_bot_core::Result<()> {
+    async fn ack(&self, job: &Job, state: AckState) -> momulus_core::Result<()> {
         self.pipeline.ack(job, state).await
     }
 
-    async fn report_error(&self, job: &Job, error: &Error) -> llm_bot_core::Result<()> {
+    async fn report_error(&self, job: &Job, error: &Error) -> momulus_core::Result<()> {
         self.pipeline.report_error(job, error).await
     }
 }

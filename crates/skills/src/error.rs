@@ -25,8 +25,8 @@ pub enum SkillError {
 
 pub type SkillResult<T> = Result<T, SkillError>;
 
-impl From<SkillError> for llm_bot_core::Error {
+impl From<SkillError> for momulus_core::Error {
     fn from(err: SkillError) -> Self {
-        llm_bot_core::Error::Skill(err.to_string())
+        momulus_core::Error::Skill(err.to_string())
     }
 }

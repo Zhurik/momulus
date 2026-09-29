@@ -174,7 +174,7 @@ fn default_api() -> Option<ProviderApi> {
     Some(ProviderApi::OpenaiCompletions)
 }
 fn default_runner_image() -> String {
-    "llm-bot-runner:latest".to_string()
+    "momulus-runner:latest".to_string()
 }
 fn default_cpu() -> f64 {
     2.0
@@ -186,10 +186,10 @@ fn default_github_api() -> String {
     "https://api.github.com".to_string()
 }
 fn default_bot_name() -> String {
-    "llm-bot".to_string()
+    "momulus".to_string()
 }
 fn default_bot_email() -> String {
-    "llm-bot@users.noreply.github.com".to_string()
+    "momulus@users.noreply.github.com".to_string()
 }
 fn default_max_diff_bytes() -> u64 {
     400_000
@@ -342,7 +342,7 @@ impl Config {
     }
 
     pub fn db_path(&self) -> PathBuf {
-        self.data_dir.join("llm-bot.sqlite")
+        self.data_dir.join("momulus.sqlite")
     }
 
     pub fn repos_dir(&self) -> PathBuf {
@@ -441,7 +441,7 @@ mod tests {
         assert_eq!(config.poll_interval, Duration::from_secs(45));
         assert_eq!(config.concurrency, 1);
         assert_eq!(config.data_dir, PathBuf::from("data"));
-        assert_eq!(config.docker.runner_image, "llm-bot-runner:latest");
+        assert_eq!(config.docker.runner_image, "momulus-runner:latest");
         assert_eq!(config.limits.max_changed_files, 100);
         assert_eq!(config.github.api_base, "https://api.github.com");
     }
@@ -541,16 +541,16 @@ mod tests {
         let config = Config::from_toml(
             r#"
             allowed_users = ["zhurik"]
-            data_dir = "/srv/llm-bot/data"
+            data_dir = "/srv/momulus/data"
         "#,
         )
         .unwrap();
         assert_eq!(
             config.db_path(),
-            PathBuf::from("/srv/llm-bot/data/llm-bot.sqlite")
+            PathBuf::from("/srv/momulus/data/momulus.sqlite")
         );
-        assert_eq!(config.repos_dir(), PathBuf::from("/srv/llm-bot/data/repos"));
-        assert_eq!(config.work_dir(), PathBuf::from("/srv/llm-bot/data/work"));
+        assert_eq!(config.repos_dir(), PathBuf::from("/srv/momulus/data/repos"));
+        assert_eq!(config.work_dir(), PathBuf::from("/srv/momulus/data/work"));
     }
 
     #[test]

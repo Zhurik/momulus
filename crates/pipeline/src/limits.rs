@@ -2,8 +2,8 @@
 
 use std::path::Path;
 
-use llm_bot_core::config::Limits;
-use llm_bot_core::{Error, Result};
+use momulus_core::config::Limits;
+use momulus_core::{Error, Result};
 
 /// Файл PR и его размер.
 #[derive(Debug, Clone, PartialEq, Eq)]

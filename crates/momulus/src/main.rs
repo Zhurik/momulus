@@ -1,4 +1,4 @@
-//! CLI сервиса llm-bot.
+//! CLI сервиса momulus.
 
 mod cli;
 mod commands;

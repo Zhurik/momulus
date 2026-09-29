@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use llm_bot_core::Result;
+use momulus_core::Result;
 
 /// Политика повторов для вызовов API.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -105,7 +105,7 @@ pub fn wait_from_headers(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use llm_bot_core::Error;
+    use momulus_core::Error;
     use std::sync::atomic::{AtomicU32, Ordering};
 
     #[test]

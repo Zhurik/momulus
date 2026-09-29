@@ -11,7 +11,7 @@ use bollard::query_parameters::{
     RemoveContainerOptionsBuilder, StartContainerOptions, WaitContainerOptionsBuilder,
 };
 use futures::StreamExt;
-use llm_bot_core::{Error, Mount, ProviderApi, Redactor, Result, RunResult, RunSpec, Runner};
+use momulus_core::{Error, Mount, ProviderApi, Redactor, Result, RunResult, RunSpec, Runner};
 
 /// Куда монтируется рабочая копия.
 pub const WORK_MOUNT: &str = "/work";
@@ -167,8 +167,8 @@ impl Runner for DockerRunner {
         };
 
         let labels = HashMap::from([
-            ("llm-bot.job".to_string(), spec.job_id.to_string()),
-            ("llm-bot.skill".to_string(), spec.skill.clone()),
+            ("momulus.job".to_string(), spec.job_id.to_string()),
+            ("momulus.skill".to_string(), spec.skill.clone()),
         ]);
 
         let body = ContainerCreateBody {
@@ -185,7 +185,7 @@ impl Runner for DockerRunner {
             ..Default::default()
         };
 
-        let name = format!("llm-bot-{}", spec.job_id.short());
+        let name = format!("momulus-{}", spec.job_id.short());
         let options = CreateContainerOptionsBuilder::default().name(&name).build();
         let created = self
             .docker
@@ -335,7 +335,7 @@ pub fn require_absolute(path: &Path, what: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use llm_bot_core::{JobId, Mount};
+    use momulus_core::{JobId, Mount};
     use std::path::PathBuf;
     use std::time::Duration;
 
@@ -352,7 +352,7 @@ mod tests {
             provider: "anthropic".into(),
             model: Some("claude-sonnet-5".into()),
             timeout: Duration::from_secs(600),
-            image: "llm-bot-runner:latest".into(),
+            image: "momulus-runner:latest".into(),
             cpu_limit: 2.0,
             memory_limit_mb: 2048,
             env: vec![("ANTHROPIC_API_KEY".into(), "sk-ant-secret".into())],

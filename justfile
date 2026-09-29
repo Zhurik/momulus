@@ -1,4 +1,4 @@
-# Задачи разработки llm-bot.
+# Задачи разработки momulus.
 
 default:
     @just --list
@@ -24,16 +24,16 @@ test-integration:
 
 # Сборка образов
 build-images:
-    docker build -f docker/Dockerfile.runner -t llm-bot-runner:latest .
-    docker build -f docker/Dockerfile -t llm-bot:latest .
+    docker build -f docker/Dockerfile.runner -t momulus-runner:latest .
+    docker build -f docker/Dockerfile -t momulus:latest .
 
 # Проверка контрактов скиллов
 skills-validate:
-    cargo run -q -p llm-bot -- skills validate
+    cargo run -q -p momulus -- skills validate
 
 # Прогон скилла на локальной папке: just try proofread ~/Projects/blog file.md
 try skill repo files="":
-    cargo run -q -p llm-bot -- run --repo-path {{repo}} --skill {{skill}}         {{ if files == "" { "" } else { "--files " + files } }} --out ./out
+    cargo run -q -p momulus -- run --repo-path {{repo}} --skill {{skill}}         {{ if files == "" { "" } else { "--files " + files } }} --out ./out
 
 # Поднять сервис через compose (нужен .env с секретами)
 up:

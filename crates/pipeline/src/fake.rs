@@ -1,11 +1,11 @@
 //! Runner-заглушка: раскладывает заранее заданные артефакты в `/out`.
 //!
-//! Используется в тестах пайплайна и в `llm-bot run --fake-runner`.
+//! Используется в тестах пайплайна и в `momulus run --fake-runner`.
 
 use std::sync::Mutex;
 
 use async_trait::async_trait;
-use llm_bot_core::{Error, Result, RunResult, RunSpec, Runner};
+use momulus_core::{Error, Result, RunResult, RunSpec, Runner};
 
 /// Что «сделает» модель на очередном вызове.
 #[derive(Debug, Clone)]
@@ -103,7 +103,7 @@ impl FakeRunner {
         self.calls.lock().expect("mutex").len()
     }
 
-    /// Копирует все файлы каталога в ответ — для `llm-bot run --fake-runner <dir>`.
+    /// Копирует все файлы каталога в ответ — для `momulus run --fake-runner <dir>`.
     pub fn from_dir(dir: &std::path::Path) -> Result<FakeRunner> {
         let mut out_files = Vec::new();
         collect(dir, dir, &mut out_files)?;
@@ -183,7 +183,7 @@ fn write_files(root: &std::path::Path, files: &[(String, String)]) -> Result<()>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use llm_bot_core::{JobId, Mount};
+    use momulus_core::{JobId, Mount};
     use std::time::Duration;
 
     fn spec(out: std::path::PathBuf, work: std::path::PathBuf) -> RunSpec {

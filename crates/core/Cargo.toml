@@ -1,5 +1,5 @@
 [package]
-name = "llm-bot-core"
+name = "momulus-core"
 edition.workspace = true
 version.workspace = true
 license.workspace = true

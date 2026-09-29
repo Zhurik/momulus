@@ -5,10 +5,10 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
 use async_trait::async_trait;
-use llm_bot_core::{
+use momulus_core::{
     AckState, Command, CommentKind, CommentRef, Error, Job, JobStatus, PrRef, Result,
 };
-use llm_bot_queue::{Db, JobHandler, Store, Worker, WorkerConfig};
+use momulus_queue::{Db, JobHandler, Store, Worker, WorkerConfig};
 use tokio::sync::{Mutex, mpsc};
 use tokio_util::sync::CancellationToken;
 
@@ -266,7 +266,7 @@ async fn duplicate_jobs_from_the_trigger_are_ignored() {
     // Две джобы на один и тот же комментарий.
     let first = job(1005);
     let mut second = job(1005);
-    second.id = llm_bot_core::JobId::new();
+    second.id = momulus_core::JobId::new();
 
     let probe = store.clone();
     run_until(
@@ -343,7 +343,7 @@ async fn shutdown_waits_for_the_running_job() {
 #[tokio::test]
 async fn jobs_left_running_are_recovered_on_start() {
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("llm-bot.sqlite");
+    let path = dir.path().join("momulus.sqlite");
     let job = job(1007);
     let id = job.id;
 

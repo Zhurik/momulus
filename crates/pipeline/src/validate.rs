@@ -2,8 +2,8 @@
 
 use std::collections::BTreeSet;
 
-use llm_bot_core::{Error, Finding, Result, ReviewOutput};
-use llm_bot_workspace::DiffIndex;
+use momulus_core::{Error, Finding, Result, ReviewOutput};
+use momulus_workspace::DiffIndex;
 
 use crate::prompt::WORK_DIR;
 
@@ -143,7 +143,7 @@ fn normalize_path(path: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use llm_bot_core::Severity;
+    use momulus_core::Severity;
 
     fn finding(path: &str, line: u32, body: &str) -> Finding {
         Finding {

@@ -1,7 +1,7 @@
 //! Минимальные модели GitHub API: только поля, которые нам нужны.
 
 use chrono::{DateTime, Utc};
-use llm_bot_core::{CommentKind, CommentRef, PrRef};
+use momulus_core::{CommentKind, CommentRef, PrRef};
 use serde::{Deserialize, Serialize};
 
 use crate::PLATFORM;

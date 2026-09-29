@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use llm_bot_core::{Result, SkillCatalog};
-use llm_bot_skills::{Registry, Skill};
+use momulus_core::{Result, SkillCatalog};
+use momulus_skills::{Registry, Skill};
 use tokio::sync::RwLock;
 
 /// Разделяемый реестр: один объект и для Trigger'а, и для пайплайна.

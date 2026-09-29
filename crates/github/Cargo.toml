@@ -1,13 +1,13 @@
 [package]
-name = "llm-bot-github"
+name = "momulus-github"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-llm-bot-core.workspace = true
-llm-bot-workspace.workspace = true
+momulus-core.workspace = true
+momulus-workspace.workspace = true
 async-trait.workspace = true
 chrono.workspace = true
 futures.workspace = true

@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use llm_bot_core::{Error, Result};
+use momulus_core::{Error, Result};
 
 use crate::git::Git;
 

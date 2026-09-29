@@ -4,7 +4,7 @@
 //! модели, но в PR ничего не уходит.
 
 use async_trait::async_trait;
-use llm_bot_core::{AckState, Finding, JobRef, Patch, PrRef, Publisher, Result};
+use momulus_core::{AckState, Finding, JobRef, Patch, PrRef, Publisher, Result};
 use url::Url;
 
 #[derive(Debug, Default)]
@@ -88,7 +88,7 @@ impl Publisher for StdoutPublisher {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use llm_bot_core::{CommentKind, CommentRef, JobId, Severity};
+    use momulus_core::{CommentKind, CommentRef, JobId, Severity};
     use std::path::PathBuf;
 
     fn pr() -> PrRef {

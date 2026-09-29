@@ -7,17 +7,17 @@ use std::ffi::OsStr;
 use std::path::Path;
 use std::process::Stdio;
 
-use llm_bot_core::{Error, Redactor, Result};
+use momulus_core::{Error, Redactor, Result};
 use tokio::process::Command;
 
 /// Переменная, из которой credential helper берёт пароль.
-const TOKEN_ENV: &str = "LLM_BOT_GIT_TOKEN";
+const TOKEN_ENV: &str = "MOMULUS_GIT_TOKEN";
 
 /// Credential helper, который отдаёт токен из окружения и ничего не пишет на диск.
 const CREDENTIAL_HELPER: &str = concat!(
     "!f() { ",
     "echo username=x-access-token; ",
-    "echo password=\"$LLM_BOT_GIT_TOKEN\"; ",
+    "echo password=\"$MOMULUS_GIT_TOKEN\"; ",
     "}; f"
 );
 

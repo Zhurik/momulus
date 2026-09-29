@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 
-use llm_bot_core::{Error, Result};
+use momulus_core::{Error, Result};
 
 /// Что случилось с файлом.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

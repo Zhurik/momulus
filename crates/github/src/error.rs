@@ -1,6 +1,6 @@
 //! Перевод ошибок octocrab в ошибки ядра с правильной классификацией.
 
-use llm_bot_core::Error;
+use momulus_core::Error;
 
 /// Превращает ошибку octocrab в ошибку ядра.
 ///

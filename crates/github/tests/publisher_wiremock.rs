@@ -4,12 +4,12 @@ use std::path::Path;
 use std::process::Command as StdCommand;
 use std::sync::Arc;
 
-use llm_bot_core::{
+use momulus_core::{
     AckState, CommentKind, CommentRef, Finding, JobId, JobRef, Patch, PrRef, Publisher, Severity,
     config::GithubConfig,
 };
-use llm_bot_github::GithubPublisher;
-use llm_bot_workspace::Git;
+use momulus_github::GithubPublisher;
+use momulus_workspace::Git;
 use octocrab::Octocrab;
 use serde_json::json;
 use wiremock::matchers::{method, path};
@@ -27,12 +27,12 @@ fn client(server: &MockServer) -> Octocrab {
 
 fn publisher(server: &MockServer) -> GithubPublisher {
     GithubPublisher::new(
-        Arc::new(llm_bot_github::FixedClient(client(server))),
+        Arc::new(momulus_github::FixedClient(client(server))),
         Git::default(),
         GithubConfig::default(),
-        Arc::new(llm_bot_core::LocalGitAccess),
+        Arc::new(momulus_core::LocalGitAccess),
     )
-    .with_backoff(llm_bot_github::backoff::Backoff {
+    .with_backoff(momulus_github::backoff::Backoff {
         attempts: 3,
         base: std::time::Duration::from_millis(1),
         max: std::time::Duration::from_millis(5),
@@ -298,8 +298,8 @@ fn patch_fixture(tmp: &Path) -> (String, Patch) {
         Patch {
             worktree: work,
             branch: "llm/translate-en-42".into(),
-            commit_message: "llm-bot: перевод".into(),
-            title: "llm-bot: translate для #42".into(),
+            commit_message: "momulus: перевод".into(),
+            title: "momulus: translate для #42".into(),
             body: "тело PR".into(),
             files: vec!["hello.en.mdx".into()],
         },
@@ -342,14 +342,14 @@ async fn pushes_branch_and_opens_pull_request() {
         Path::new(&origin),
         &["log", "-1", "--format=%an <%ae>", "llm/translate-en-42"],
     );
-    assert_eq!(author, "llm-bot <llm-bot@users.noreply.github.com>");
+    assert_eq!(author, "momulus <momulus@users.noreply.github.com>");
 
     // База нового PR — head-ветка исходного.
     let request = server.received_requests().await.unwrap().pop().unwrap();
     let body: serde_json::Value = serde_json::from_slice(&request.body).unwrap();
     assert_eq!(body["base"], "feature");
     assert_eq!(body["head"], "llm/translate-en-42");
-    assert_eq!(body["title"], "llm-bot: translate для #42");
+    assert_eq!(body["title"], "momulus: translate для #42");
 }
 
 #[tokio::test]

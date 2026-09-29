@@ -1,6 +1,6 @@
 //! Тексты, которые бот пишет в PR. Платформенно-независимый markdown.
 
-use llm_bot_core::{Finding, JobId};
+use momulus_core::{Finding, JobId};
 
 use crate::validate::ReviewResult;
 
@@ -105,7 +105,7 @@ pub fn pr_title(
             .join(", ");
         format!(" ({joined})")
     };
-    format!("llm-bot: {skill}{suffix} для #{source_pr}")
+    format!("momulus: {skill}{suffix} для #{source_pr}")
 }
 
 /// Описание pull request с изменениями.
@@ -208,7 +208,7 @@ pub fn fork_unsupported(ctx: &JobContext<'_>, head_repo: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use llm_bot_core::{Severity, Uuid};
+    use momulus_core::{Severity, Uuid};
     use std::collections::BTreeMap;
 
     /// Фиксированный id, чтобы снапшоты не плыли.
@@ -292,11 +292,11 @@ mod tests {
         let args = BTreeMap::from([("lang".to_string(), "en".to_string())]);
         assert_eq!(
             pr_title("translate", 42, &args),
-            "llm-bot: translate (lang=en) для #42"
+            "momulus: translate (lang=en) для #42"
         );
         assert_eq!(
             pr_title("translate", 42, &BTreeMap::new()),
-            "llm-bot: translate для #42"
+            "momulus: translate для #42"
         );
     }
 

@@ -1,12 +1,12 @@
 [package]
-name = "llm-bot-runner-docker"
+name = "momulus-runner-docker"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-llm-bot-core.workspace = true
+momulus-core.workspace = true
 async-trait.workspace = true
 bollard.workspace = true
 futures.workspace = true

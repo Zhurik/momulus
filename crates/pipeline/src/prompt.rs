@@ -2,8 +2,8 @@
 
 use std::collections::BTreeMap;
 
-use llm_bot_core::ReviewOutput;
-use llm_bot_skills::{Mode, Skill};
+use momulus_core::ReviewOutput;
+use momulus_skills::{Mode, Skill};
 
 /// Куда монтируется рабочая копия внутри контейнера.
 pub const WORK_DIR: &str = "/work";
@@ -19,7 +19,7 @@ pub const SUMMARY_FILE: &str = "summary.md";
 pub enum Origin {
     /// Джоба по команде в PR.
     PullRequest { repo: String, number: u64 },
-    /// Локальный прогон через `llm-bot run`.
+    /// Локальный прогон через `momulus run`.
     Local { path: String },
 }
 
@@ -146,7 +146,7 @@ pub fn review_schema() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use llm_bot_skills::{SkillContract, SkillDoc};
+    use momulus_skills::{SkillContract, SkillDoc};
     use std::path::PathBuf;
 
     fn skill(name: &str, contract: &str) -> Skill {

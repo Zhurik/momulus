@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use llm_bot_core::{CursorStore, Error, Result};
+use momulus_core::{CursorStore, Error, Result};
 use sqlx::Row;
 
 use crate::Db;
@@ -152,7 +152,7 @@ mod tests {
     #[tokio::test]
     async fn state_survives_restart() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("llm-bot.sqlite");
+        let path = dir.path().join("momulus.sqlite");
         let value = "2026-09-29T10:00:00Z".parse::<DateTime<Utc>>().unwrap();
         {
             let store = Store::new(Db::open(&path).await.unwrap());

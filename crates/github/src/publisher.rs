@@ -3,11 +3,11 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use llm_bot_core::{
+use momulus_core::{
     AckState, Error, Finding, GitAccess, JobRef, Patch, PrRef, Publisher, Result,
     config::GithubConfig,
 };
-use llm_bot_workspace::Git;
+use momulus_workspace::Git;
 use url::Url;
 
 use crate::app::ClientProvider;
@@ -111,8 +111,8 @@ impl GithubPublisher {
     /// Путь до реакций на комментарий нужного типа.
     fn reactions_route(pr: &PrRef, job: &JobRef) -> String {
         let kind = match job.comment.kind {
-            llm_bot_core::CommentKind::Issue => "issues",
-            llm_bot_core::CommentKind::Review => "pulls",
+            momulus_core::CommentKind::Issue => "issues",
+            momulus_core::CommentKind::Review => "pulls",
         };
         format!(
             "/repos/{}/{}/{kind}/comments/{}/reactions",
@@ -273,7 +273,7 @@ impl Publisher for GithubPublisher {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use llm_bot_core::{CommentKind, CommentRef, JobId, Severity};
+    use momulus_core::{CommentKind, CommentRef, JobId, Severity};
 
     fn pr() -> PrRef {
         PrRef {

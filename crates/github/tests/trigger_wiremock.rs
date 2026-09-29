@@ -3,10 +3,10 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use llm_bot_core::{CommentKind, CursorStore, MemoryCursorStore, StaticSkillCatalog};
-use llm_bot_github::backoff::Backoff;
-use llm_bot_github::trigger::{ClientSource, STREAM_ISSUE, STREAM_REVIEW};
-use llm_bot_github::{GithubTrigger, TriggerConfig};
+use momulus_core::{CommentKind, CursorStore, MemoryCursorStore, StaticSkillCatalog};
+use momulus_github::backoff::Backoff;
+use momulus_github::trigger::{ClientSource, STREAM_ISSUE, STREAM_REVIEW};
+use momulus_github::{GithubTrigger, TriggerConfig};
 use octocrab::Octocrab;
 use serde_json::json;
 use wiremock::matchers::{method, path, query_param, query_param_is_missing};
@@ -509,7 +509,7 @@ async fn app_mode_discovers_repositories_of_installations() {
     mock_empty_review_comments(&server).await;
 
     let key = include_str!("data/test-app-key.pem");
-    let auth = llm_bot_github::AppAuth::new(12345, key.as_bytes(), &server.uri()).unwrap();
+    let auth = momulus_github::AppAuth::new(12345, key.as_bytes(), &server.uri()).unwrap();
     let trigger = GithubTrigger::new(
         TriggerConfig {
             poll_interval: Duration::from_millis(10),

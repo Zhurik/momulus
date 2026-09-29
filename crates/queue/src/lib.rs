@@ -11,7 +11,7 @@ pub use worker::{JobHandler, Worker, WorkerConfig};
 use std::path::Path;
 use std::str::FromStr;
 
-use llm_bot_core::{Error, Result};
+use momulus_core::{Error, Result};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::{Row, SqlitePool};
 
@@ -100,7 +100,7 @@ mod tests {
     #[tokio::test]
     async fn file_database_is_created_with_parent_dirs() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("nested/llm-bot.sqlite");
+        let path = dir.path().join("nested/momulus.sqlite");
         let db = Db::open(&path).await.unwrap();
         assert!(path.exists());
         db.close().await;
@@ -109,7 +109,7 @@ mod tests {
     #[tokio::test]
     async fn migrations_are_idempotent() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("llm-bot.sqlite");
+        let path = dir.path().join("momulus.sqlite");
         Db::open(&path).await.unwrap().close().await;
         let db = Db::open(&path).await.unwrap();
         assert!(db.tables().await.unwrap().contains(&"jobs".to_string()));

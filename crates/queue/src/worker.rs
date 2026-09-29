@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use llm_bot_core::{AckState, Error, Job, JobId, Result};
+use momulus_core::{AckState, Error, Job, JobId, Result};
 use tokio::sync::{Notify, Semaphore, mpsc};
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
@@ -231,6 +231,6 @@ async fn finish_ok(store: &Store, handler: &Arc<dyn JobHandler>, job: &Job) {
 }
 
 /// Полезно тестам: проверить, что джоба существует и в каком она статусе.
-pub async fn status_of(store: &Store, id: JobId) -> Result<Option<llm_bot_core::JobStatus>> {
+pub async fn status_of(store: &Store, id: JobId) -> Result<Option<momulus_core::JobStatus>> {
     Ok(store.job(id).await?.map(|stored| stored.status))
 }

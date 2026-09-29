@@ -3,7 +3,7 @@ use predicates::str::contains;
 
 #[test]
 fn help_lists_subcommands() {
-    Command::cargo_bin("llm-bot")
+    Command::cargo_bin("momulus")
         .unwrap()
         .arg("--help")
         .assert()
@@ -15,7 +15,7 @@ fn help_lists_subcommands() {
 
 #[test]
 fn unknown_subcommand_fails() {
-    Command::cargo_bin("llm-bot")
+    Command::cargo_bin("momulus")
         .unwrap()
         .arg("nope")
         .assert()
@@ -55,7 +55,7 @@ fn fixture_skills(dir: &std::path::Path, broken: bool) {
 fn skills_list_prints_registry() {
     let dir = tempfile::tempdir().unwrap();
     fixture_skills(dir.path(), false);
-    Command::cargo_bin("llm-bot")
+    Command::cargo_bin("momulus")
         .unwrap()
         .args([
             "--skills-dir",
@@ -74,7 +74,7 @@ fn skills_list_prints_registry() {
 fn skills_validate_passes_on_good_contracts() {
     let dir = tempfile::tempdir().unwrap();
     fixture_skills(dir.path(), false);
-    Command::cargo_bin("llm-bot")
+    Command::cargo_bin("momulus")
         .unwrap()
         .args([
             "--skills-dir",
@@ -91,7 +91,7 @@ fn skills_validate_passes_on_good_contracts() {
 fn skills_validate_fails_on_broken_contract() {
     let dir = tempfile::tempdir().unwrap();
     fixture_skills(dir.path(), true);
-    Command::cargo_bin("llm-bot")
+    Command::cargo_bin("momulus")
         .unwrap()
         .args([
             "--skills-dir",
@@ -107,7 +107,7 @@ fn skills_validate_fails_on_broken_contract() {
 
 #[test]
 fn skills_validate_reports_missing_directory() {
-    Command::cargo_bin("llm-bot")
+    Command::cargo_bin("momulus")
         .unwrap()
         .args(["--skills-dir", "/definitely/not/here", "skills", "validate"])
         .assert()
@@ -118,7 +118,7 @@ fn skills_validate_reports_missing_directory() {
 #[test]
 fn bundled_skills_are_valid() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../skills");
-    Command::cargo_bin("llm-bot")
+    Command::cargo_bin("momulus")
         .unwrap()
         .args(["--skills-dir", root.to_str().unwrap(), "skills", "validate"])
         .assert()
@@ -152,7 +152,7 @@ fn run_with_fake_runner_prints_findings() {
     .unwrap();
 
     let out = tmp.path().join("out");
-    Command::cargo_bin("llm-bot")
+    Command::cargo_bin("momulus")
         .unwrap()
         .args([
             "--skills-dir",
@@ -186,7 +186,7 @@ fn run_reports_when_nothing_matches_the_filter() {
     std::fs::create_dir_all(&repo).unwrap();
     std::fs::write(repo.join("main.rs"), "fn main() {}\n").unwrap();
 
-    Command::cargo_bin("llm-bot")
+    Command::cargo_bin("momulus")
         .unwrap()
         .args([
             "--skills-dir",
@@ -212,7 +212,7 @@ fn run_rejects_unknown_skill() {
     let repo = tmp.path().join("repo");
     fixture_repo(&repo);
 
-    Command::cargo_bin("llm-bot")
+    Command::cargo_bin("momulus")
         .unwrap()
         .args([
             "--skills-dir",
@@ -240,7 +240,7 @@ fn run_fails_when_skill_produced_no_findings_file() {
     let empty = tmp.path().join("empty");
     std::fs::create_dir_all(&empty).unwrap();
 
-    Command::cargo_bin("llm-bot")
+    Command::cargo_bin("momulus")
         .unwrap()
         .args([
             "--skills-dir",
@@ -262,7 +262,7 @@ fn run_fails_when_skill_produced_no_findings_file() {
 
 #[test]
 fn serve_reports_missing_config() {
-    Command::cargo_bin("llm-bot")
+    Command::cargo_bin("momulus")
         .unwrap()
         .args(["--config", "/definitely/not/here.toml", "serve"])
         .assert()
@@ -285,7 +285,7 @@ fn serve_reports_missing_github_secrets() {
     )
     .unwrap();
 
-    Command::cargo_bin("llm-bot")
+    Command::cargo_bin("momulus")
         .unwrap()
         .args([
             "--config",
@@ -319,7 +319,7 @@ fn serve_requires_base_url_for_custom_provider() {
     )
     .unwrap();
 
-    Command::cargo_bin("llm-bot")
+    Command::cargo_bin("momulus")
         .unwrap()
         .args(["--config", config.to_str().unwrap(), "serve"])
         .env_remove("LLM_BASE_URL")

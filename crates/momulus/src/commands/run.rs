@@ -1,17 +1,17 @@
-//! `llm-bot run` — прогон одного скилла на локальной папке, без платформы.
+//! `momulus run` — прогон одного скилла на локальной папке, без платформы.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use llm_bot_core::{Args as CommandArgs, Config, JobId, Mount, RunSpec, Runner, Secrets};
-use llm_bot_pipeline::prompt::{Origin, PromptContext};
-use llm_bot_pipeline::{
+use momulus_core::{Args as CommandArgs, Config, JobId, Mount, RunSpec, Runner, Secrets};
+use momulus_pipeline::prompt::{Origin, PromptContext};
+use momulus_pipeline::{
     FakeRunner, JobContext, check_input, measure_files, prepare_review, render, run_patch,
     run_review,
 };
-use llm_bot_runner_docker::{DockerRunner, models_json};
-use llm_bot_skills::{Mode, Registry, Skill};
+use momulus_runner_docker::{DockerRunner, models_json};
+use momulus_skills::{Mode, Registry, Skill};
 
 use crate::cli::{Cli, RunArgs};
 use crate::commands::skills::{load_config_or_default, resolve_skills_dir};
@@ -148,12 +148,12 @@ pub async fn run(cli: &Cli, args: &RunArgs) -> Result<()> {
 }
 
 /// Разворачивает ошибку шага в anyhow, подсказывая, где искать лог.
-fn finish<T>(step: llm_bot_core::Result<T>, log_path: &Path) -> Result<T> {
+fn finish<T>(step: momulus_core::Result<T>, log_path: &Path) -> Result<T> {
     step.map_err(|err| anyhow::anyhow!("{err} (лог: {})", log_path.display()))
 }
 
 /// Печатает вывод агента по попыткам.
-fn print_runs(runs: &[llm_bot_core::RunResult]) {
+fn print_runs(runs: &[momulus_core::RunResult]) {
     for (i, run) in runs.iter().enumerate() {
         if runs.len() > 1 {
             println!("\n--- вывод агента, попытка {} ---", i + 1);

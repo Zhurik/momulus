@@ -6,7 +6,7 @@ use clap::{Args as ClapArgs, Parser, Subcommand, ValueEnum};
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "llm-bot",
+    name = "momulus",
     version,
     about = "Оркестратор LLM-скиллов для pull request'ов"
 )]
@@ -17,7 +17,7 @@ pub struct Cli {
         short,
         global = true,
         default_value = "config.toml",
-        env = "LLM_BOT_CONFIG"
+        env = "MOMULUS_CONFIG"
     )]
     pub config: PathBuf,
 
@@ -119,14 +119,14 @@ mod tests {
 
     #[test]
     fn parses_serve_with_dry_run() {
-        let cli = Cli::parse_from(["llm-bot", "serve", "--dry-run"]);
+        let cli = Cli::parse_from(["momulus", "serve", "--dry-run"]);
         assert!(matches!(cli.command, Commands::Serve { dry_run: true }));
     }
 
     #[test]
     fn parses_run_with_files_and_args() {
         let cli = Cli::parse_from([
-            "llm-bot",
+            "momulus",
             "run",
             "--repo-path",
             "/tmp/repo",
@@ -148,7 +148,7 @@ mod tests {
     fn rejects_bad_arg_syntax() {
         assert!(
             Cli::try_parse_from([
-                "llm-bot",
+                "momulus",
                 "run",
                 "--repo-path",
                 ".",
