@@ -1,13 +1,12 @@
 ---
 source: crates/pipeline/src/render.rs
-assertion_line: 327
-expression: "help_comment(\"неизвестный скилл \\\"proofraed\\\"\",\n\"Доступные команды:\\n\\n- `/llm proofread` (review) — вычитка\\n- `/llm translate <lang>` (patch) — перевод\\n\\nФормат: `/llm <skill> [аргументы]`.\\n\")"
+expression: "help_comment(\"unknown skill \\\"proofraed\\\"\",\n\"Available commands:\\n\\n- `/llm proofread` (review) — proofreading\\n- `/llm translate <lang>` (patch) — translation\\n\\nFormat: `/llm <skill> [arguments]`.\\n\")"
 ---
-Не понял команду: неизвестный скилл "proofraed"
+I could not parse that command: unknown skill "proofraed"
 
-Доступные команды:
+Available commands:
 
-- `/llm proofread` (review) — вычитка
-- `/llm translate <lang>` (patch) — перевод
+- `/llm proofread` (review) — proofreading
+- `/llm translate <lang>` (patch) — translation
 
-Формат: `/llm <skill> [аргументы]`.
+Format: `/llm <skill> [arguments]`.

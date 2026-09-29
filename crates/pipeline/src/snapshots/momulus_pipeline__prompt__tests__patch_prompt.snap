@@ -1,28 +1,29 @@
 ---
 source: crates/pipeline/src/prompt.rs
-assertion_line: 200
 expression: ctx.render()
 ---
 /skill:translate
 
-Контекст: pull request #7 в репозитории acme/blog.
-Рабочая копия смонтирована в /work. Все пути ниже — относительно /work.
+Context: pull request #7 in the repository acme/blog.
+The working copy is mounted at /work. Every path below is relative to /work.
 
-Файлы, с которыми нужно работать:
+Files to work on:
 - posts/hello.mdx
 
-Аргументы команды:
+Command arguments:
 - lang = en
 
-Параметры скилла:
+Skill parameters:
 - naming = {stem}.{lang}{ext}
 
-## Что сделать
+## What to do
 
-Правь файлы прямо в /work. Когда закончишь:
+Edit the files directly under /work. When you are done:
 
-- запиши в /out/summary.md короткое резюме изменений на русском
-  (что и зачем поменял, чего намеренно не трогал);
-- не выполняй git-команд: коммит, ветку и pull request делает оркестратор;
-- не трогай файлы вне /work, кроме /out/summary.md;
-- если менять нечего, ничего не меняй и напиши это в /out/summary.md.
+- write a short summary of the changes to /out/summary.md
+  (what you changed and why, what you deliberately left alone);
+- do not run git commands: the orchestrator handles the commit, the branch
+  and the pull request;
+- do not touch anything outside /work, except /out/summary.md;
+- if there is nothing to change, change nothing and say so in
+  /out/summary.md.

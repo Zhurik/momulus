@@ -1,4 +1,4 @@
-//! Поведение воркера: статусы, ретраи, конкурентность, остановка.
+//! Worker behaviour: statuses, retries, concurrency, shutdown.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -39,14 +39,14 @@ fn job(comment_id: u64) -> Job {
     )
 }
 
-/// Обработчик, которым управляет тест.
+/// A handler driven by the test.
 struct ScriptedHandler {
-    /// Что вернуть на каждый вызов по порядку; когда сценарий кончился — успех.
+    /// What to return on each call, in order; once the script runs out, success.
     script: Mutex<Vec<Result<()>>>,
     calls: AtomicU32,
     acks: Mutex<Vec<AckState>>,
     errors: AtomicU32,
-    /// Задержка внутри обработки — для проверки остановки и конкурентности.
+    /// Delay inside the handler — used to test shutdown and concurrency.
     delay: Duration,
 }
 
@@ -98,7 +98,7 @@ impl JobHandler for ScriptedHandler {
     }
 }
 
-/// Запускает воркер, ждёт условие и останавливает его.
+/// Starts the worker, waits for a condition and shuts it down.
 async fn run_until<F, Fut>(
     store: Store,
     handler: Arc<ScriptedHandler>,
@@ -122,7 +122,7 @@ async fn run_until<F, Fut>(
         tx.send(job).await.unwrap();
     }
 
-    // Ждём выполнения условия, но не дольше пяти секунд.
+    // Wait for the condition, but no longer than five seconds.
     let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
     while tokio::time::Instant::now() < deadline && !condition().await {
         tokio::time::sleep(Duration::from_millis(20)).await;
@@ -173,7 +173,7 @@ async fn successful_job_is_marked_done_and_acked() {
 #[tokio::test]
 async fn transient_error_is_retried_then_succeeds() {
     let store = Store::new(Db::open_in_memory().await.unwrap());
-    let handler = ScriptedHandler::new(vec![Err(Error::Network("сеть отвалилась".into())), Ok(())]);
+    let handler = ScriptedHandler::new(vec![Err(Error::Network("network dropped".into())), Ok(())]);
     let job = job(1002);
     let id = job.id;
 
@@ -192,9 +192,9 @@ async fn transient_error_is_retried_then_succeeds() {
 
     let stored = store.job(id).await.unwrap().unwrap();
     assert_eq!(stored.status, JobStatus::Done);
-    assert_eq!(stored.attempts, 2, "одна повторная попытка");
+    assert_eq!(stored.attempts, 2, "exactly one retry");
     assert_eq!(handler.call_count(), 2);
-    // Отметка о взятии ставится только на первой попытке.
+    // The pick-up reaction is set on the first attempt only.
     let acks = handler.acks.lock().await.clone();
     assert_eq!(acks.iter().filter(|s| **s == AckState::Received).count(), 1);
 }
@@ -203,10 +203,10 @@ async fn transient_error_is_retried_then_succeeds() {
 async fn transient_errors_stop_after_max_attempts() {
     let store = Store::new(Db::open_in_memory().await.unwrap());
     let handler = ScriptedHandler::new(vec![
-        Err(Error::Network("раз".into())),
-        Err(Error::Network("два".into())),
-        Err(Error::Network("три".into())),
-        Err(Error::Network("четыре".into())),
+        Err(Error::Network("one".into())),
+        Err(Error::Network("two".into())),
+        Err(Error::Network("three".into())),
+        Err(Error::Network("four".into())),
     ]);
     let job = job(1003);
     let id = job.id;
@@ -226,17 +226,21 @@ async fn transient_errors_stop_after_max_attempts() {
 
     let stored = store.job(id).await.unwrap().unwrap();
     assert_eq!(stored.status, JobStatus::Failed);
-    assert_eq!(stored.attempts, 3, "первая попытка плюс два повтора");
+    assert_eq!(stored.attempts, 3, "the first attempt plus two retries");
     assert_eq!(handler.call_count(), 3);
-    assert!(stored.error.unwrap().contains("три"));
-    assert_eq!(handler.errors.load(Ordering::SeqCst), 1, "сообщили в PR");
+    assert!(stored.error.unwrap().contains("three"));
+    assert_eq!(
+        handler.errors.load(Ordering::SeqCst),
+        1,
+        "reported to the PR"
+    );
     assert_eq!(handler.acks.lock().await.last(), Some(&AckState::Failed));
 }
 
 #[tokio::test]
 async fn permanent_error_is_not_retried() {
     let store = Store::new(Db::open_in_memory().await.unwrap());
-    let handler = ScriptedHandler::new(vec![Err(Error::InvalidOutput("не JSON".into()))]);
+    let handler = ScriptedHandler::new(vec![Err(Error::InvalidOutput("not JSON".into()))]);
     let job = job(1004);
     let id = job.id;
 
@@ -263,7 +267,7 @@ async fn permanent_error_is_not_retried() {
 async fn duplicate_jobs_from_the_trigger_are_ignored() {
     let store = Store::new(Db::open_in_memory().await.unwrap());
     let handler = ScriptedHandler::new(vec![Ok(()), Ok(())]);
-    // Две джобы на один и тот же комментарий.
+    // Two jobs for one and the same comment.
     let first = job(1005);
     let mut second = job(1005);
     second.id = momulus_core::JobId::new();
@@ -281,7 +285,7 @@ async fn duplicate_jobs_from_the_trigger_are_ignored() {
     )
     .await;
 
-    assert_eq!(handler.call_count(), 1, "обработали только одну");
+    assert_eq!(handler.call_count(), 1, "only one of them ran");
 }
 
 #[tokio::test]
@@ -325,7 +329,7 @@ async fn shutdown_waits_for_the_running_job() {
     };
     tx.send(job).await.unwrap();
 
-    // Дожидаемся, пока джоба реально начнёт выполняться, и просим остановиться.
+    // Wait until the job actually starts, then ask the worker to stop.
     while handler.call_count() == 0 {
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
@@ -336,7 +340,7 @@ async fn shutdown_waits_for_the_running_job() {
     assert_eq!(
         stored.status,
         JobStatus::Done,
-        "текущая джоба досчитана до конца"
+        "the running job was allowed to finish"
     );
 }
 
@@ -347,7 +351,7 @@ async fn jobs_left_running_are_recovered_on_start() {
     let job = job(1007);
     let id = job.id;
 
-    // Предыдущий запуск умер посреди джобы.
+    // The previous run died in the middle of a job.
     {
         let store = Store::new(Db::open(&path).await.unwrap());
         store.enqueue(&job).await.unwrap();
@@ -373,6 +377,9 @@ async fn jobs_left_running_are_recovered_on_start() {
 
     let stored = store.job(id).await.unwrap().unwrap();
     assert_eq!(stored.status, JobStatus::Done);
-    assert_eq!(stored.attempts, 2, "попытка после восстановления — вторая");
+    assert_eq!(
+        stored.attempts, 2,
+        "the attempt after recovery is the second one"
+    );
     assert_eq!(handler.call_count(), 1);
 }

@@ -1,14 +1,14 @@
-//! Разбор unified diff и маппинг номеров строк на hunk'и.
+//! Unified diff parsing and mapping of line numbers onto hunks.
 //!
-//! Нужен для двух вещей: отобрать изменённые файлы под фильтр скилла и понять,
-//! можно ли повесить inline-комментарий на строку (платформа принимает только
-//! строки, попавшие в diff).
+//! Serves two purposes: selecting the changed files a skill cares about, and
+//! deciding whether a line can carry an inline comment (the platform only
+//! accepts lines that appear in the diff).
 
 use std::collections::BTreeMap;
 
 use momulus_core::{Error, Result};
 
-/// Что случилось с файлом.
+/// What happened to a file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileStatus {
     Added,
@@ -17,7 +17,7 @@ pub enum FileStatus {
     Renamed,
 }
 
-/// Тип строки внутри hunk.
+/// Kind of a line inside a hunk.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LineKind {
     Context,
@@ -25,7 +25,7 @@ pub enum LineKind {
     Removed,
 }
 
-/// Строка hunk с номерами в старой и новой версии файла.
+/// A hunk line with its numbers in the old and the new version of the file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiffLine {
     pub kind: LineKind,
@@ -34,7 +34,7 @@ pub struct DiffLine {
     pub text: String,
 }
 
-/// Один hunk: `@@ -a,b +c,d @@`.
+/// A single hunk: `@@ -a,b +c,d @@`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Hunk {
     pub old_start: u32,
@@ -45,7 +45,7 @@ pub struct Hunk {
 }
 
 impl Hunk {
-    /// Диапазон строк новой версии файла, покрытый hunk'ом.
+    /// Range of new-version lines covered by the hunk.
     pub fn new_range(&self) -> std::ops::RangeInclusive<u32> {
         let end = if self.new_lines == 0 {
             self.new_start
@@ -55,7 +55,7 @@ impl Hunk {
         self.new_start..=end
     }
 
-    /// Есть ли в hunk'е строка с таким номером в новой версии.
+    /// Whether the hunk contains a line with this number in the new version.
     pub fn covers_new_line(&self, line: u32) -> bool {
         self.lines
             .iter()
@@ -63,12 +63,12 @@ impl Hunk {
     }
 }
 
-/// Diff одного файла.
+/// Diff of a single file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileDiff {
-    /// Путь в новой версии (для удалённого файла — путь до удаления).
+    /// Path in the new version (for a deleted file, the path before deletion).
     pub path: String,
-    /// Прежний путь при переименовании.
+    /// Previous path when the file was renamed.
     pub old_path: Option<String>,
     pub status: FileStatus,
     pub binary: bool,
@@ -76,7 +76,7 @@ pub struct FileDiff {
 }
 
 impl FileDiff {
-    /// Строки, добавленные или изменённые в новой версии.
+    /// Lines added or changed in the new version.
     pub fn added_lines(&self) -> Vec<u32> {
         self.hunks
             .iter()
@@ -86,13 +86,13 @@ impl FileDiff {
             .collect()
     }
 
-    /// Можно ли комментировать строку: она должна быть видна в diff справа.
+    /// Whether a line can be commented on: it must appear on the right side of the diff.
     pub fn covers_new_line(&self, line: u32) -> bool {
         self.hunks.iter().any(|h| h.covers_new_line(line))
     }
 }
 
-/// Разбирает вывод `git diff` в список файлов.
+/// Parses `git diff` output into a list of files.
 pub fn parse_unified_diff(text: &str) -> Result<Vec<FileDiff>> {
     let mut files: Vec<FileDiff> = Vec::new();
     let mut current: Option<FileDiff> = None;
@@ -100,7 +100,7 @@ pub fn parse_unified_diff(text: &str) -> Result<Vec<FileDiff>> {
     let mut old_line = 0u32;
     let mut new_line = 0u32;
 
-    /// Закрывает текущий hunk и кладёт его в файл.
+    /// Closes the current hunk and attaches it to the file.
     fn flush_hunk(current: &mut Option<FileDiff>, hunk: &mut Option<Hunk>) {
         if let (Some(file), Some(h)) = (current.as_mut(), hunk.take()) {
             file.hunks.push(h);
@@ -125,7 +125,7 @@ pub fn parse_unified_diff(text: &str) -> Result<Vec<FileDiff>> {
         }
 
         let Some(file) = current.as_mut() else {
-            // Мусор до первого заголовка (например, текст коммита) игнорируем.
+            // Anything before the first header (a commit message, say) is ignored.
             continue;
         };
 
@@ -142,7 +142,7 @@ pub fn parse_unified_diff(text: &str) -> Result<Vec<FileDiff>> {
         } else if raw.starts_with("Binary files ") || raw.starts_with("GIT binary patch") {
             file.binary = true;
         } else if let Some(tail) = raw.strip_prefix("+++ ") {
-            // Путь из заголовка надёжнее, когда в имени есть пробелы.
+            // The path from the header is more reliable when the name has spaces.
             if let Some(path) = strip_prefix_marker(tail)
                 && file.status != FileStatus::Deleted
             {
@@ -167,7 +167,7 @@ pub fn parse_unified_diff(text: &str) -> Result<Vec<FileDiff>> {
                 Some(' ') => (LineKind::Context, &raw[1..]),
                 Some('\\') => continue, // "\ No newline at end of file"
                 None => (LineKind::Context, ""),
-                _ => continue, // Хвост вывода вроде "-- " от git format-patch.
+                _ => continue, // Trailing output such as "-- " from git format-patch.
             };
             let (old, new) = match kind {
                 LineKind::Added => {
@@ -203,19 +203,19 @@ pub fn parse_unified_diff(text: &str) -> Result<Vec<FileDiff>> {
     Ok(files)
 }
 
-/// Достаёт путь из строки `a/path b/path`.
+/// Extracts the path from an `a/path b/path` line.
 fn parse_diff_header(rest: &str) -> Result<String> {
-    // Имена могут содержать пробелы, поэтому опираемся на префиксы a/ и b/.
+    // Names may contain spaces, so we lean on the a/ and b/ prefixes.
     if let Some(b_at) = rest.rfind(" b/") {
         return Ok(unquote_path(&rest[b_at + 3..]));
     }
     if let Some(path) = rest.split_whitespace().next_back() {
         return Ok(unquote_path(path.trim_start_matches("b/")));
     }
-    Err(Error::Git(format!("непонятный заголовок diff: {rest:?}")))
+    Err(Error::Git(format!("unparseable diff header: {rest:?}")))
 }
 
-/// Убирает префикс `a/` или `b/` из строк `---`/`+++`; `/dev/null` даёт `None`.
+/// Strips the `a/` or `b/` prefix from `---`/`+++` lines; `/dev/null` yields `None`.
 fn strip_prefix_marker(path: &str) -> Option<String> {
     let path = path.split('\t').next().unwrap_or(path).trim_end();
     if path == "/dev/null" {
@@ -230,7 +230,7 @@ fn strip_prefix_marker(path: &str) -> Option<String> {
     Some(path)
 }
 
-/// Снимает кавычки, которыми git оборачивает не-ASCII пути.
+/// Removes the quotes git puts around non-ASCII paths.
 fn unquote_path(path: &str) -> String {
     let path = path.trim();
     if path.len() >= 2 && path.starts_with('"') && path.ends_with('"') {
@@ -240,9 +240,9 @@ fn unquote_path(path: &str) -> String {
     path.to_string()
 }
 
-/// Разбирает `@@ -a,b +c,d @@`.
+/// Parses `@@ -a,b +c,d @@`.
 fn parse_hunk_header(line: &str) -> Result<Hunk> {
-    let bad = || Error::Git(format!("непонятный заголовок hunk: {line:?}"));
+    let bad = || Error::Git(format!("unparseable hunk header: {line:?}"));
     let body = line.trim_start_matches('@').trim();
     let body = body.split("@@").next().ok_or_else(bad)?.trim();
     let mut parts = body.split_whitespace();
@@ -270,7 +270,7 @@ fn parse_range(text: &str) -> Option<(u32, u32)> {
     }
 }
 
-/// Индекс diff'а PR: быстрый доступ по пути файла.
+/// Index over a PR diff: fast lookup by file path.
 #[derive(Debug, Clone, Default)]
 pub struct DiffIndex {
     files: BTreeMap<String, FileDiff>,
@@ -290,12 +290,12 @@ impl DiffIndex {
         }
     }
 
-    /// Все файлы diff'а.
+    /// Every file in the diff.
     pub fn files(&self) -> impl Iterator<Item = &FileDiff> {
         self.files.values()
     }
 
-    /// Пути изменённых файлов, кроме удалённых и бинарных — их нет смысла читать.
+    /// Paths of changed files, excluding deleted and binary ones — reading those is pointless.
     pub fn reviewable_files(&self) -> Vec<&str> {
         self.files
             .values()
@@ -316,8 +316,8 @@ impl DiffIndex {
         self.files.len()
     }
 
-    /// Можно ли повесить inline-комментарий на строку: платформа принимает
-    /// только строки, попавшие в diff.
+    /// Whether a line can carry an inline comment: the platform only accepts
+    /// lines that appear in the diff.
     pub fn is_commentable(&self, path: &str, line: u32) -> bool {
         self.files
             .get(path)
@@ -335,12 +335,12 @@ index 1111111..2222222 100644
 --- a/posts/hello.mdx
 +++ b/posts/hello.mdx
 @@ -1,4 +1,5 @@
- # Привет
+ # Hello
  
--Старая строка
-+Новая строка
-+Ещё одна
- Хвост
+-Old line
++New line
++One more
+ Tail
 ";
 
     #[test]
@@ -365,7 +365,7 @@ index 1111111..2222222 100644
             .filter(|l| l.kind == LineKind::Added)
             .map(|l| (l.new_line.unwrap(), l.text.as_str()))
             .collect();
-        assert_eq!(added, vec![(3, "Новая строка"), (4, "Ещё одна")]);
+        assert_eq!(added, vec![(3, "New line"), (4, "One more")]);
 
         let removed: Vec<(u32, &str)> = hunk
             .lines
@@ -373,7 +373,7 @@ index 1111111..2222222 100644
             .filter(|l| l.kind == LineKind::Removed)
             .map(|l| (l.old_line.unwrap(), l.text.as_str()))
             .collect();
-        assert_eq!(removed, vec![(3, "Старая строка")]);
+        assert_eq!(removed, vec![(3, "Old line")]);
     }
 
     #[test]
@@ -394,15 +394,15 @@ index 0000000..1111111
 --- /dev/null
 +++ b/new.md
 @@ -0,0 +1,2 @@
-+раз
-+два
++one
++two
 diff --git a/gone.md b/gone.md
 deleted file mode 100644
 index 1111111..0000000
 --- a/gone.md
 +++ /dev/null
 @@ -1,1 +0,0 @@
--был
+-gone
 ";
         let files = parse_unified_diff(text).unwrap();
         assert_eq!(files.len(), 2);
@@ -423,8 +423,8 @@ rename to new.md
 --- a/old.md
 +++ b/new.md
 @@ -1 +1 @@
--раз
-+два
+-one
++two
 ";
         let files = parse_unified_diff(text).unwrap();
         assert_eq!(files[0].status, FileStatus::Renamed);
@@ -452,14 +452,14 @@ diff --git a/a.md b/a.md
 --- a/a.md
 +++ b/a.md
 @@ -1,2 +1,2 @@
- раз
--два
-+ДВА
+ one
+-two
++TWO
 @@ -10,3 +10,4 @@
- десять
- одиннадцать
-+вставка
- двенадцать
+ ten
+ eleven
++inserted
+ twelve
 ";
         let files = parse_unified_diff(text).unwrap();
         assert_eq!(files[0].hunks.len(), 2);
@@ -470,15 +470,15 @@ diff --git a/a.md b/a.md
     #[test]
     fn handles_paths_with_spaces_and_unicode() {
         let text = "\
-diff --git a/посты/про котиков.mdx b/посты/про котиков.mdx
---- a/посты/про котиков.mdx	
-+++ b/посты/про котиков.mdx	
+diff --git a/posts/über kätzchen.mdx b/posts/über kätzchen.mdx
+--- a/posts/über kätzchen.mdx	
++++ b/posts/über kätzchen.mdx	
 @@ -1 +1 @@
--раз
-+два
+-one
++two
 ";
         let files = parse_unified_diff(text).unwrap();
-        assert_eq!(files[0].path, "посты/про котиков.mdx");
+        assert_eq!(files[0].path, "posts/über kätzchen.mdx");
     }
 
     #[test]
@@ -488,9 +488,9 @@ diff --git a/a.txt b/a.txt
 --- a/a.txt
 +++ b/a.txt
 @@ -1 +1 @@
--раз
+-one
 \\ No newline at end of file
-+два
++two
 \\ No newline at end of file
 ";
         let files = parse_unified_diff(text).unwrap();
@@ -504,8 +504,8 @@ diff --git a/a.txt b/a.txt
 --- a/a.txt
 +++ b/a.txt
 @@ -5 +5 @@ fn main()
--раз
-+два
+-one
++two
 ";
         let files = parse_unified_diff(text).unwrap();
         let hunk = &files[0].hunks[0];
@@ -535,15 +535,15 @@ diff --git a/a.txt b/a.txt
         let index = DiffIndex::parse(SIMPLE).unwrap();
         assert_eq!(index.len(), 1);
         assert_eq!(index.reviewable_files(), vec!["posts/hello.mdx"]);
-        // Добавленные строки.
+        // Added lines.
         assert!(index.is_commentable("posts/hello.mdx", 3));
         assert!(index.is_commentable("posts/hello.mdx", 4));
-        // Контекст внутри hunk — тоже можно.
+        // Context lines inside the hunk work too.
         assert!(index.is_commentable("posts/hello.mdx", 1));
         assert!(index.is_commentable("posts/hello.mdx", 5));
-        // Вне hunk и неизвестный файл — нельзя.
+        // Outside the hunk, or an unknown file — not allowed.
         assert!(!index.is_commentable("posts/hello.mdx", 99));
-        assert!(!index.is_commentable("другой.mdx", 1));
+        assert!(!index.is_commentable("other.mdx", 1));
     }
 
     #[test]
@@ -553,12 +553,12 @@ diff --git a/a.md b/a.md
 --- a/a.md
 +++ b/a.md
 @@ -1,3 +1,2 @@
- раз
--два
- три
+ one
+-two
+ three
 ";
         let index = DiffIndex::parse(text).unwrap();
-        // В новой версии строки 1 и 2 существуют, третьей нет.
+        // Lines 1 and 2 exist in the new version, line 3 does not.
         assert!(index.is_commentable("a.md", 1));
         assert!(index.is_commentable("a.md", 2));
         assert!(!index.is_commentable("a.md", 3));

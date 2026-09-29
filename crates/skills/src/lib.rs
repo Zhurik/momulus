@@ -1,4 +1,4 @@
-//! Реестр скиллов и их контракты.
+//! The skill registry and skill contracts.
 
 pub mod contract;
 pub mod doc;

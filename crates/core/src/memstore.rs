@@ -1,4 +1,4 @@
-//! Реализации трейтов в памяти — для тестов и для `--dry-run`.
+//! In-memory trait implementations — for tests and for `--dry-run`.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Mutex;
@@ -10,7 +10,7 @@ use crate::error::Result;
 use crate::traits::{CursorStore, GitAccess, SkillCatalog};
 use crate::types::PrRef;
 
-/// Курсоры и метки в памяти.
+/// Cursors and seen marks kept in memory.
 #[derive(Debug, Default)]
 pub struct MemoryCursorStore {
     cursors: Mutex<BTreeMap<(String, String), DateTime<Utc>>>,
@@ -51,7 +51,7 @@ impl CursorStore for MemoryCursorStore {
     }
 }
 
-/// Фиксированный список скиллов — для тестов платформенного кода.
+/// A fixed list of skills — for testing platform code.
 #[derive(Debug, Clone)]
 pub struct StaticSkillCatalog {
     skills: Vec<String>,
@@ -76,7 +76,7 @@ impl SkillCatalog for StaticSkillCatalog {
     }
 
     async fn help_text(&self) -> String {
-        let mut out = String::from("Доступные команды:\n\n");
+        let mut out = String::from("Available commands:\n\n");
         for skill in &self.skills {
             out.push_str(&format!("- `/llm {skill}`\n"));
         }
@@ -98,7 +98,7 @@ mod tests {
             store.cursor("github:a/b", "issue").await.unwrap(),
             Some(now)
         );
-        // Другой поток того же репозитория — свой курсор.
+        // A different stream of the same repository has its own cursor.
         assert!(
             store
                 .cursor("github:a/b", "review")
@@ -125,7 +125,7 @@ mod tests {
     }
 }
 
-/// Доступ к git без авторизации: локальный remote в тестах и прогонах на диске.
+/// Git access without authentication: local remotes in tests and on-disk runs.
 #[derive(Debug, Clone, Default)]
 pub struct LocalGitAccess;
 

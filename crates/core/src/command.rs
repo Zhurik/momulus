@@ -1,13 +1,13 @@
-//! Парсер команд вида `/llm <skill> [key=value | позиционные args]`.
+//! Parser for commands of the form `/llm <skill> [key=value | positional args]`.
 
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-/// Префикс, с которого должно начинаться тело комментария.
+/// Prefix a comment body has to start with.
 pub const COMMAND_PREFIX: &str = "/llm";
 
-/// Разобранная команда.
+/// A parsed command.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Command {
     pub skill: String,
@@ -15,7 +15,7 @@ pub struct Command {
     pub args: Args,
 }
 
-/// Аргументы команды: позиционные и именованные.
+/// Command arguments: positional and named.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Args {
     #[serde(default)]
@@ -29,16 +29,16 @@ impl Args {
         self.positional.is_empty() && self.named.is_empty()
     }
 
-    /// Значение именованного аргумента.
+    /// Value of a named argument.
     pub fn get(&self, key: &str) -> Option<&str> {
         self.named.get(key).map(String::as_str)
     }
 }
 
-/// Почему тело комментария не стало командой.
+/// Why a comment body did not become a command.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum CommandParseError {
-    /// Тело не начинается с `/llm` — такие комментарии молча игнорируются.
+    /// The body does not start with `/llm` — such comments are ignored silently.
     #[error("not a command")]
     NotACommand,
 
@@ -59,10 +59,10 @@ pub enum CommandParseError {
 }
 
 impl Command {
-    /// Разбирает тело комментария.
+    /// Parses a comment body.
     ///
-    /// Команда должна быть в первой непустой строке; остальной текст игнорируется,
-    /// чтобы можно было писать пояснения ниже.
+    /// The command must be on the first non-empty line; the rest of the text is
+    /// ignored so that a human can add an explanation below.
     pub fn parse(body: &str) -> Result<Command, CommandParseError> {
         let line = body
             .lines()
@@ -104,7 +104,7 @@ impl Command {
         Ok(Command { skill, args })
     }
 
-    /// Обратный рендер команды — для логов и тела PR.
+    /// Renders the command back to text — for logs and PR bodies.
     pub fn to_command_line(&self) -> String {
         let mut out = format!("{COMMAND_PREFIX} {}", self.skill);
         for value in &self.args.positional {
@@ -121,7 +121,7 @@ impl Command {
     }
 }
 
-/// Делит токен на `key=value`, если ключ выглядит как идентификатор.
+/// Splits a token into `key=value` when the key looks like an identifier.
 fn split_named(token: &str) -> Option<(&str, &str)> {
     let (key, value) = token.split_once('=')?;
     if key.is_empty() {
@@ -149,7 +149,7 @@ fn is_valid_skill_name(name: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
-/// Разбивает строку на токены с поддержкой одинарных и двойных кавычек.
+/// Splits a string into tokens, honouring single and double quotes.
 fn tokenize(input: &str) -> Result<Vec<String>, CommandParseError> {
     let mut tokens = Vec::new();
     let mut current = String::new();
@@ -234,9 +234,9 @@ mod tests {
 
     #[test]
     fn handles_quoted_values() {
-        let cmd = Command::parse(r#"/llm review focus="error handling" 'два слова'"#).unwrap();
+        let cmd = Command::parse(r#"/llm review focus="error handling" 'two words'"#).unwrap();
         assert_eq!(cmd.args.get("focus"), Some("error handling"));
-        assert_eq!(cmd.args.positional, vec!["два слова".to_string()]);
+        assert_eq!(cmd.args.positional, vec!["two words".to_string()]);
     }
 
     #[test]
@@ -247,7 +247,7 @@ mod tests {
 
     #[test]
     fn ignores_text_after_the_command_line() {
-        let cmd = Command::parse("/llm proofread\n\nпожалуйста, только вступление").unwrap();
+        let cmd = Command::parse("/llm proofread\n\nplease, the intro only").unwrap();
         assert_eq!(cmd.skill, "proofread");
         assert!(cmd.args.is_empty());
     }
@@ -261,12 +261,12 @@ mod tests {
     #[test]
     fn rejects_non_commands() {
         for body in [
-            "просто комментарий",
+            "just a comment",
             "",
             "   ",
             "llm proofread",
             "/llmproofread",
-            "текст\n/llm proofread",
+            "some text\n/llm proofread",
         ] {
             assert_eq!(
                 Command::parse(body),
@@ -323,7 +323,7 @@ mod tests {
 
     #[test]
     fn value_with_url_stays_positional_like() {
-        // В значении может быть '=' — делим по первому.
+        // A value may contain '=' — we split on the first one.
         let cmd = Command::parse("/llm review url=https://x/y?a=b").unwrap();
         assert_eq!(cmd.args.get("url"), Some("https://x/y?a=b"));
     }

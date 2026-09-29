@@ -1,17 +1,17 @@
-//! Ошибки ядра и их классификация для политики ретраев.
+//! Core errors and their classification for the retry policy.
 
 use std::time::Duration;
 
-/// Класс ошибки: определяет, имеет ли смысл повторная попытка.
+/// Error class: decides whether retrying makes sense.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErrorKind {
-    /// Временная проблема (сеть, 5xx, 429, таймаут) — можно повторить.
+    /// Temporary problem (network, 5xx, 429, timeout) — worth retrying.
     Transient,
-    /// Постоянная проблема — повтор не поможет.
+    /// Permanent problem — retrying will not help.
     Permanent,
 }
 
-/// Ошибка ядра. Библиотечные крейты возвращают именно её.
+/// Core error type. Library crates return exactly this.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("network error: {0}")]
@@ -61,7 +61,7 @@ pub enum Error {
 }
 
 impl Error {
-    /// Классификация ошибки для политики ретраев.
+    /// Classifies the error for the retry policy.
     pub fn kind(&self) -> ErrorKind {
         match self {
             Error::Network(_)
@@ -72,12 +72,12 @@ impl Error {
         }
     }
 
-    /// Можно ли повторить операцию.
+    /// Whether the operation may be retried.
     pub fn is_transient(&self) -> bool {
         self.kind() == ErrorKind::Transient
     }
 
-    /// Сколько подождать перед повтором, если сервер это сообщил.
+    /// How long to wait before retrying, when the server told us.
     pub fn retry_after(&self) -> Option<Duration> {
         match self {
             Error::RateLimited { retry_after } => *retry_after,
@@ -85,7 +85,7 @@ impl Error {
         }
     }
 
-    /// Ошибка из HTTP-статуса: 429 и 5xx транзиентные, остальное — нет.
+    /// Builds an error from an HTTP status: 429 and 5xx are transient, the rest is not.
     pub fn from_status(status: u16, message: impl Into<String>) -> Self {
         match status {
             429 => Error::RateLimited { retry_after: None },

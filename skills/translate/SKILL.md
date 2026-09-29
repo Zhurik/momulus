@@ -1,45 +1,48 @@
 ---
 name: translate
-description: Перевод изменённых статей блога на другой язык с сохранением MDX, frontmatter и код-блоков
+description: Translate changed blog posts into another language, preserving MDX, frontmatter and code blocks. Use it when a post needs a translated counterpart.
 ---
 
 # Translate
 
-Ты переводишь статьи блога на язык, заданный аргументом `lang` (код языка,
-например `en`). Переводы кладутся рядом с оригиналом по конвенции `naming`
-из промпта:
+You translate blog posts into the language given by the `lang` argument (a
+language code such as `en`). Translations are placed next to the original
+following the `naming` convention from the prompt:
 
-- `{dir}` — каталог оригинала, `{ext}` — расширение, `{lang}` — целевой язык;
-- `{stem}` — имя файла без расширения, **без кода языка**: если в имени
-  оригинала язык уже есть (`index.ru.md`), он заменяется на целевой, а не
-  дописывается. То есть `content/posts/dns/index.ru.md` + `lang=en` →
-  `content/posts/dns/index.en.md`, а `posts/hello.mdx` → `posts/hello.en.mdx`;
-- если файл перевода уже существует, перезапиши его целиком.
+- `{dir}` is the original's directory, `{ext}` the extension, `{lang}` the target
+  language;
+- `{stem}` is the file name without extension and **without a language code**: if
+  the original name already carries one (`index.ru.md`), it is replaced rather
+  than appended. So `content/posts/dns/index.ru.md` + `lang=en` becomes
+  `content/posts/dns/index.en.md`, and `posts/hello.mdx` becomes
+  `posts/hello.en.mdx`;
+- if the translated file already exists, overwrite it completely.
 
-## Что делать
+## What to do
 
-1. Для каждого файла из списка изменённых файлов прочитай оригинал.
-2. Создай (или перезапиши) файл перевода по конвенции именования.
-3. Переведи прозу. Сохрани без изменений:
-   - структуру MDX и JSX-компоненты, их имена и атрибуты (переводится только
-     видимый пользователю текст внутри компонентов);
-   - импорты и код-блоки — содержимое кода не переводится, переводятся только
-     комментарии внутри кода, если они на исходном языке;
-   - ссылки, пути к изображениям, якоря;
-   - разметку: заголовки, списки, таблицы, цитаты, сноски.
-4. Во frontmatter переведи только человеческие поля (`title`, `description`,
-   `summary`, `tags` — если теги осмысленные слова). Не трогай `slug`, `date`,
-   `draft`, `layout`, идентификаторы и любые технические поля.
-5. Сохрани тон оригинала: неформальный, простой, без канцелярита.
+1. Read the original of every file in the list of changed files.
+2. Create (or overwrite) the translation file following the naming convention.
+3. Translate the prose. Keep the following unchanged:
+   - the MDX structure and the JSX components, their names and attributes (only
+     the text visible to a reader gets translated);
+   - imports and code blocks — code itself is never translated; comments inside
+     code are translated only when they are in the source language;
+   - links, image paths, anchors;
+   - markup: headings, lists, tables, quotes, footnotes.
+4. In the frontmatter, translate only the human-facing fields (`title`,
+   `description`, `summary`, and `tags` when they are meaningful words). Leave
+   `slug`, `date`, `draft`, `layout`, identifiers and any technical field alone.
+5. Preserve the tone of the original: informal, plain, free of bureaucratese.
 
-## Чего не делать
+## What not to do
 
-- Не редактировать оригинал — он остаётся как есть.
-- Не переводить файлы, которых нет в списке изменённых.
-- Не создавать никаких файлов, кроме переводов.
-- Не коммитить и не работать с git: коммит и push делает оркестратор.
+- Do not edit the original — it stays as it is.
+- Do not translate files that are not in the list of changed files.
+- Do not create any file other than the translations.
+- Do not commit and do not touch git: the orchestrator handles that.
 
-## В конце
+## When you are done
 
-Запиши в `/out/summary.md` короткое резюме: какие файлы переведены, на какой язык,
-и что осталось нетронутым намеренно (например, термины, которые не переводятся).
+Write a short summary to `/out/summary.md`: which files you translated, into
+which language, and what you deliberately left untouched (terms that stay in the
+original language, for instance).

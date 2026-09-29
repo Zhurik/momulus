@@ -1,9 +1,9 @@
-//! Маскирование секретов во всём, что попадает в логи и в комментарии PR.
+//! Masking secrets in everything that reaches logs and PR comments.
 
-/// Чем заменяем секрет.
+/// What a secret is replaced with.
 pub const MASK: &str = "***";
 
-/// Набор строк, которые нельзя показывать.
+/// The set of strings that must never be shown.
 #[derive(Debug, Clone, Default)]
 pub struct Redactor {
     secrets: Vec<String>,
@@ -14,8 +14,8 @@ impl Redactor {
         Self::default()
     }
 
-    /// Добавляет секрет; слишком короткие строки игнорируются, чтобы не
-    /// превратить вывод в сплошные звёздочки.
+    /// Adds a secret; very short strings are ignored so the output does not
+    /// turn into a wall of asterisks.
     pub fn with_secret(mut self, secret: impl Into<String>) -> Self {
         self.add(secret);
         self
@@ -32,7 +32,7 @@ impl Redactor {
         self.secrets.is_empty()
     }
 
-    /// Заменяет известные секреты и логин-часть URL на [`MASK`].
+    /// Replaces known secrets and URL credentials with [`MASK`].
     pub fn redact(&self, text: &str) -> String {
         let mut out = text.to_string();
         for secret in &self.secrets {
@@ -44,7 +44,7 @@ impl Redactor {
     }
 }
 
-/// Убирает `user:password@` из любых URL в тексте.
+/// Strips `user:password@` from any URL in the text.
 fn redact_url_credentials(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
@@ -76,7 +76,7 @@ fn redact_url_credentials(text: &str) -> String {
     out
 }
 
-/// Находит `(offset, len)` ближайшего `scheme://`.
+/// Finds the `(offset, len)` of the nearest `scheme://`.
 fn find_scheme(text: &str) -> Option<(usize, usize)> {
     let at = text.find("://")?;
     let start = text[..at]
@@ -84,7 +84,7 @@ fn find_scheme(text: &str) -> Option<(usize, usize)> {
         .map(|i| i + 1)
         .unwrap_or(0);
     if start == at {
-        // Нет имени схемы — пропускаем эти три символа.
+        // No scheme name — skip those three characters.
         return Some((at, 3));
     }
     Some((start, at - start + 3))

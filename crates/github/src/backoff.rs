@@ -1,13 +1,13 @@
-//! Повторы с экспоненциальной задержкой и джиттером, с учётом rate limit.
+//! Retries with exponential backoff and jitter, honouring rate limits.
 
 use std::time::Duration;
 
 use momulus_core::Result;
 
-/// Политика повторов для вызовов API.
+/// Retry policy for API calls.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Backoff {
-    /// Сколько всего попыток (включая первую).
+    /// Total number of attempts (including the first one).
     pub attempts: u32,
     pub base: Duration,
     pub max: Duration,
@@ -24,22 +24,22 @@ impl Default for Backoff {
 }
 
 impl Backoff {
-    /// Задержка перед попыткой номер `attempt` (нумерация с 1), без джиттера.
+    /// Delay before attempt number `attempt` (1-based), without jitter.
     pub fn delay(&self, attempt: u32) -> Duration {
         let exponent = attempt.saturating_sub(1).min(16);
         let scaled = self.base.saturating_mul(2u32.saturating_pow(exponent));
         scaled.min(self.max)
     }
 
-    /// Задержка с джиттером ±25% — чтобы повторы не били в одну секунду.
+    /// Delay with ±25% jitter — so retries do not all land on the same second.
     pub fn delay_with_jitter(&self, attempt: u32) -> Duration {
         jitter(self.delay(attempt))
     }
 
-    /// Выполняет операцию, повторяя транзиентные ошибки.
+    /// Runs an operation, retrying transient errors.
     ///
-    /// Если сервер сказал, сколько ждать (`Retry-After` через
-    /// [`Error::RateLimited`]), уважаем его значение.
+    /// If the server told us how long to wait (`Retry-After` via
+    /// [`Error::RateLimited`]), we honour that value.
     pub async fn retry<T, F, Fut>(&self, what: &str, mut operation: F) -> Result<T>
     where
         F: FnMut() -> Fut,
@@ -59,7 +59,7 @@ impl Backoff {
                         attempt,
                         wait_ms = wait.as_millis() as u64,
                         error = %err,
-                        "повторяем запрос"
+                        "retrying the request"
                     );
                     tokio::time::sleep(wait).await;
                     attempt += 1;
@@ -70,7 +70,7 @@ impl Backoff {
     }
 }
 
-/// Добавляет к задержке случайные ±25%.
+/// Adds a random ±25% to the delay.
 fn jitter(base: Duration) -> Duration {
     if base.is_zero() {
         return base;
@@ -81,9 +81,9 @@ fn jitter(base: Duration) -> Duration {
     Duration::from_millis(millis.saturating_sub(spread).saturating_add(offset))
 }
 
-/// Сколько ждать по заголовкам ответа GitHub.
+/// How long to wait based on GitHub's response headers.
 ///
-/// Смотрим `Retry-After`, затем `X-RateLimit-Remaining`/`X-RateLimit-Reset`.
+/// We look at `Retry-After`, then at `X-RateLimit-Remaining`/`X-RateLimit-Reset`.
 pub fn wait_from_headers(
     retry_after: Option<&str>,
     remaining: Option<&str>,
@@ -121,7 +121,7 @@ mod tests {
         assert_eq!(
             backoff.delay(4),
             Duration::from_millis(500),
-            "упёрлись в max"
+            "capped at max"
         );
         assert_eq!(backoff.delay(10), Duration::from_millis(500));
     }

@@ -1,4 +1,4 @@
-//! Рабочая копия на одну джобу: `git worktree` с гарантированной очисткой.
+//! One working copy per job: a `git worktree` with guaranteed cleanup.
 
 use std::path::{Path, PathBuf};
 
@@ -6,23 +6,23 @@ use momulus_core::{Error, Result};
 
 use crate::git::Git;
 
-/// Worktree, который удаляется при выходе из области видимости —
-/// в том числе при ошибке и панике.
+/// A worktree that is removed when it goes out of scope — including on errors
+/// and on panic.
 #[derive(Debug)]
 pub struct Worktree {
     path: PathBuf,
     bare: PathBuf,
     git: Git,
-    /// Снимаем флаг, если очистка уже сделана явно.
+    /// Cleared once the cleanup has been performed explicitly.
     armed: bool,
 }
 
 impl Worktree {
-    /// Создаёт worktree на конкретном коммите в detached-состоянии.
+    /// Creates a detached worktree at a specific commit.
     pub async fn create(git: &Git, bare: &Path, dest: &Path, sha: &str) -> Result<Worktree> {
         if dest.exists() {
             return Err(Error::Git(format!(
-                "каталог {} уже существует",
+                "directory {} already exists",
                 dest.display()
             )));
         }
@@ -59,7 +59,7 @@ impl Worktree {
         &self.git
     }
 
-    /// Пути файлов, изменённых в рабочей копии (`git status --porcelain`).
+    /// Paths of files changed in the working copy (`git status --porcelain`).
     pub async fn dirty_files(&self) -> Result<Vec<String>> {
         let out = self
             .git
@@ -68,12 +68,12 @@ impl Worktree {
         Ok(parse_porcelain_z(&out.stdout))
     }
 
-    /// Есть ли в рабочей копии несохранённые изменения.
+    /// Whether the working copy has uncommitted changes.
     pub async fn is_dirty(&self) -> Result<bool> {
         Ok(!self.dirty_files().await?.is_empty())
     }
 
-    /// Diff рабочей копии относительно HEAD, включая новые файлы.
+    /// Diff of the working copy against HEAD, including new files.
     pub async fn diff(&self) -> Result<String> {
         self.git
             .run(Some(&self.path), ["add", "--intent-to-add", "--all"])
@@ -85,7 +85,7 @@ impl Worktree {
         Ok(out.stdout)
     }
 
-    /// Явная очистка с диагностикой (в отличие от Drop, где ошибки только логируются).
+    /// Explicit cleanup with diagnostics (unlike Drop, which only logs failures).
     pub async fn cleanup(mut self) -> Result<()> {
         self.armed = false;
         remove_worktree_async(&self.git, &self.bare, &self.path).await
@@ -97,7 +97,7 @@ impl Drop for Worktree {
         if !self.armed {
             return;
         }
-        // Drop синхронный, поэтому тут блокирующий git — операция короткая.
+        // Drop is synchronous, so this git call blocks — the operation is short.
         let status = std::process::Command::new("git")
             .args(["worktree", "remove", "--force"])
             .arg(&self.path)
@@ -112,9 +112,9 @@ impl Drop for Worktree {
 
         let removed = matches!(status, Ok(status) if status.success());
         if !removed && self.path.exists() {
-            // Если git не справился, убираем каталог руками и чистим метаданные.
+            // If git could not do it, remove the directory by hand and prune metadata.
             if let Err(err) = std::fs::remove_dir_all(&self.path) {
-                tracing::warn!(path = %self.path.display(), error = %err, "не удалось удалить worktree");
+                tracing::warn!(path = %self.path.display(), error = %err, "could not remove the worktree");
             }
             let _ = std::process::Command::new("git")
                 .args(["worktree", "prune"])
@@ -140,7 +140,7 @@ async fn remove_worktree_async(git: &Git, bare: &Path, path: &Path) -> Result<()
     Ok(())
 }
 
-/// Разбирает `git status --porcelain -z`: записи разделены нулевым байтом.
+/// Parses `git status --porcelain -z`: entries are separated by NUL bytes.
 fn parse_porcelain_z(raw: &str) -> Vec<String> {
     let mut files = Vec::new();
     let mut parts = raw.split('\0').filter(|p| !p.is_empty());
@@ -150,7 +150,7 @@ fn parse_porcelain_z(raw: &str) -> Vec<String> {
         }
         let status = &entry[..2];
         let path = entry[3..].to_string();
-        // Для переименований следующий элемент — прежнее имя, оно нам не нужно.
+        // For renames the next entry is the old name, which we do not need.
         if status.starts_with('R') || status.starts_with('C') {
             let _ = parts.next();
         }

@@ -1,4 +1,4 @@
-//! Минимальные модели GitHub API: только поля, которые нам нужны.
+//! Minimal GitHub API models: only the fields we actually need.
 
 use chrono::{DateTime, Utc};
 use momulus_core::{CommentKind, CommentRef, PrRef};
@@ -9,7 +9,7 @@ use crate::PLATFORM;
 #[derive(Debug, Clone, Deserialize)]
 pub struct User {
     pub login: String,
-    /// "User" или "Bot" — на комментарии ботов не реагируем.
+    /// "User" or "Bot" — we never react to comments from bots.
     #[serde(rename = "type", default)]
     pub kind: Option<String>,
 }
@@ -20,7 +20,7 @@ impl User {
     }
 }
 
-/// Комментарий к issue или PR (`/repos/{o}/{r}/issues/comments`).
+/// A comment on an issue or a PR (`/repos/{o}/{r}/issues/comments`).
 #[derive(Debug, Clone, Deserialize)]
 pub struct IssueComment {
     pub id: u64,
@@ -34,15 +34,15 @@ pub struct IssueComment {
 }
 
 impl IssueComment {
-    /// Комментарий относится к pull request, а не к issue.
+    /// The comment belongs to a pull request rather than an issue.
     ///
-    /// В этом ответе API нет отдельного признака, зато html_url у PR всегда
-    /// содержит `/pull/`.
+    /// This API response has no dedicated flag, but a PR's html_url always
+    /// contains `/pull/`.
     pub fn is_pull_request(&self) -> bool {
         self.html_url.contains("/pull/")
     }
 
-    /// Номер PR из issue_url.
+    /// PR number taken from issue_url.
     pub fn pr_number(&self) -> Option<u64> {
         last_path_number(&self.issue_url)
     }
@@ -57,7 +57,7 @@ impl IssueComment {
     }
 }
 
-/// Комментарий в треде ревью (`/repos/{o}/{r}/pulls/comments`).
+/// A comment inside a review thread (`/repos/{o}/{r}/pulls/comments`).
 #[derive(Debug, Clone, Deserialize)]
 pub struct ReviewComment {
     pub id: u64,
@@ -112,7 +112,7 @@ pub struct PullRequest {
 }
 
 impl PullRequest {
-    /// Собирает платформенно-независимую ссылку на PR.
+    /// Builds a platform-independent reference to the PR.
     pub fn pr_ref(&self, owner: &str, repo: &str) -> PrRef {
         let base_full_name = format!("{owner}/{repo}");
         PrRef {
@@ -143,26 +143,26 @@ impl PullRequest {
     }
 }
 
-/// Установка приложения.
+/// An App installation.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Installation {
     pub id: u64,
 }
 
-/// Ответ `/installation/repositories`.
+/// Response of `/installation/repositories`.
 #[derive(Debug, Clone, Deserialize)]
 pub struct InstallationRepositories {
     pub repositories: Vec<Repo>,
 }
 
-/// Ответ создания pull request.
+/// Response of creating a pull request.
 #[derive(Debug, Clone, Deserialize)]
 pub struct CreatedPullRequest {
     pub number: u64,
     pub html_url: String,
 }
 
-/// Тело запроса `POST /repos/{o}/{r}/pulls/{n}/reviews`.
+/// Request body for `POST /repos/{o}/{r}/pulls/{n}/reviews`.
 #[derive(Debug, Clone, Serialize)]
 pub struct ReviewRequest {
     pub commit_id: String,
@@ -172,7 +172,7 @@ pub struct ReviewRequest {
     pub comments: Vec<ReviewCommentRequest>,
 }
 
-/// Inline-комментарий ревью.
+/// An inline review comment.
 #[derive(Debug, Clone, Serialize)]
 pub struct ReviewCommentRequest {
     pub path: String,
@@ -181,7 +181,7 @@ pub struct ReviewCommentRequest {
     pub body: String,
 }
 
-/// Тело запроса создания PR.
+/// Request body for creating a PR.
 #[derive(Debug, Clone, Serialize)]
 pub struct CreatePullRequest {
     pub title: String,
@@ -191,19 +191,19 @@ pub struct CreatePullRequest {
     pub maintainer_can_modify: bool,
 }
 
-/// Тело запроса обычного комментария.
+/// Request body for a plain comment.
 #[derive(Debug, Clone, Serialize)]
 pub struct CommentRequest {
     pub body: String,
 }
 
-/// Тело запроса реакции.
+/// Request body for a reaction.
 #[derive(Debug, Clone, Serialize)]
 pub struct ReactionRequest {
     pub content: &'static str,
 }
 
-/// Последнее числовое звено пути URL.
+/// The last numeric path segment of a URL.
 fn last_path_number(url: &str) -> Option<u64> {
     url.rsplit('/')
         .find(|part| !part.is_empty())

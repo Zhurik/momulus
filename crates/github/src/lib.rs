@@ -1,4 +1,4 @@
-//! Платформенный слой GitHub: Trigger на polling и Publisher на octocrab.
+//! The GitHub platform layer: a polling Trigger and an octocrab Publisher.
 
 pub mod app;
 pub mod auth;
@@ -13,5 +13,5 @@ pub use auth::AppAuth;
 pub use publisher::GithubPublisher;
 pub use trigger::{ClientSource, GithubTrigger, TriggerConfig};
 
-/// Идентификатор платформы во всех типах ядра.
+/// The platform identifier used across the core types.
 pub const PLATFORM: &str = "github";

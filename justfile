@@ -1,41 +1,41 @@
-# Задачи разработки momulus.
+# Development tasks for momulus.
 
 default:
     @just --list
 
-# Форматирование
+# Formatting
 fmt:
     cargo fmt --all
 
 fmt-check:
     cargo fmt --all --check
 
-# Линт: предупреждения — ошибки
+# Lint: warnings are errors
 lint:
     cargo clippy --all-targets --all-features -- -D warnings
 
-# Быстрые тесты (без Docker и сети)
+# Fast tests (no Docker, no network)
 test: fmt-check lint
     cargo test --all-features
 
-# Тесты, которым нужен Docker и настоящий pi
+# Tests that need Docker and a real pi
 test-integration:
     cargo test --all-features -- --ignored --nocapture
 
-# Сборка образов
+# Build the images
 build-images:
     docker build -f docker/Dockerfile.runner -t momulus-runner:latest .
     docker build -f docker/Dockerfile -t momulus:latest .
 
-# Проверка контрактов скиллов
+# Validate the skill contracts
 skills-validate:
     cargo run -q -p momulus -- skills validate
 
-# Прогон скилла на локальной папке: just try proofread ~/Projects/blog file.md
+# Run a skill on a local directory: just try proofread ~/Projects/blog file.md
 try skill repo files="":
     cargo run -q -p momulus -- run --repo-path {{repo}} --skill {{skill}}         {{ if files == "" { "" } else { "--files " + files } }} --out ./out
 
-# Поднять сервис через compose (нужен .env с секретами)
+# Bring the service up with compose (needs a .env with the secrets)
 up:
     docker compose --profile build build
     docker compose up -d

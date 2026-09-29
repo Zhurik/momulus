@@ -1,13 +1,12 @@
 ---
 source: crates/pipeline/src/render.rs
-assertion_line: 263
 expression: "review_summary(&result, &ctx(\"/llm proofread\", \"proofread\"), 1)"
 ---
-**`/llm proofread`** — проверено файлов: 1, замечаний: 0.
+**`/llm proofread`** — files checked: 1, findings: 0.
 
-Всё чисто, замечаний нет.
+All clean, nothing to report.
 
-Замечаний нет.
+No findings.
 
 
-<sub>скилл `proofread` · job `1a2b3c4d`</sub>
+<sub>skill `proofread` · job `1a2b3c4d`</sub>

@@ -1,24 +1,24 @@
-//! Runner-заглушка: раскладывает заранее заданные артефакты в `/out`.
+//! A stub runner: it drops predefined artifacts into `/out`.
 //!
-//! Используется в тестах пайплайна и в `momulus run --fake-runner`.
+//! Used by the pipeline tests and by `momulus run --fake-runner`.
 
 use std::sync::Mutex;
 
 use async_trait::async_trait;
 use momulus_core::{Error, Result, RunResult, RunSpec, Runner};
 
-/// Что «сделает» модель на очередном вызове.
+/// What the model "does" on the next call.
 #[derive(Debug, Clone)]
 pub struct FakeResponse {
-    /// Файлы, которые появятся в out_dir: (относительный путь, содержимое).
+    /// Files that appear in out_dir: (relative path, contents).
     pub out_files: Vec<(String, String)>,
-    /// Файлы, которые появятся в рабочей копии (для patch-скиллов).
+    /// Files that appear in the working copy (for patch skills).
     pub work_files: Vec<(String, String)>,
     pub result: RunResult,
 }
 
 impl FakeResponse {
-    /// Успешный прогон, который записал `findings.json`.
+    /// A successful run that wrote `findings.json`.
     pub fn findings(json: impl Into<String>) -> FakeResponse {
         FakeResponse {
             out_files: vec![("findings.json".to_string(), json.into())],
@@ -27,7 +27,7 @@ impl FakeResponse {
         }
     }
 
-    /// Успешный прогон patch-скилла: правки в рабочей копии плюс summary.
+    /// A successful patch run: edits in the working copy plus a summary.
     pub fn patch(work_files: Vec<(String, String)>, summary: impl Into<String>) -> FakeResponse {
         FakeResponse {
             out_files: vec![("summary.md".to_string(), summary.into())],
@@ -36,7 +36,7 @@ impl FakeResponse {
         }
     }
 
-    /// Прогон, который ничего не изменил.
+    /// A run that changed nothing.
     pub fn empty() -> FakeResponse {
         FakeResponse {
             out_files: Vec::new(),
@@ -54,25 +54,25 @@ impl FakeResponse {
 fn ok_result() -> RunResult {
     RunResult {
         exit_code: 0,
-        stdout: "fake runner: готово\n".to_string(),
+        stdout: "fake runner: done\n".to_string(),
         stderr: String::new(),
         timed_out: false,
     }
 }
 
-/// Runner для тестов: отдаёт заготовленные ответы по очереди.
+/// A runner for tests: hands out prepared responses in order.
 #[derive(Debug)]
 pub struct FakeRunner {
     responses: Mutex<Vec<FakeResponse>>,
-    /// Последний отданный ответ — для режима повтора.
+    /// The last response handed out — used by the repeating mode.
     last: Mutex<Option<FakeResponse>>,
-    /// Повторять последний ответ, когда очередь исчерпана.
+    /// Repeat the last response once the queue runs out.
     repeat: bool,
     calls: Mutex<Vec<RunSpec>>,
 }
 
 impl FakeRunner {
-    /// Ответы отдаются в порядке, в котором переданы.
+    /// Responses are handed out in the order they were given.
     pub fn new(responses: Vec<FakeResponse>) -> FakeRunner {
         FakeRunner {
             responses: Mutex::new(responses.into_iter().rev().collect()),
@@ -82,19 +82,19 @@ impl FakeRunner {
         }
     }
 
-    /// Отдавать последний ответ и дальше — так ведёт себя `--fake-runner <dir>`:
-    /// каталог с артефактами один и тот же на каждую попытку.
+    /// Keep handing out the last response — that is how `--fake-runner <dir>`
+    /// behaves: the artifact directory is the same on every attempt.
     pub fn repeating(mut self) -> FakeRunner {
         self.repeat = true;
         self
     }
 
-    /// Один успешный ответ с находками.
+    /// A single successful response carrying findings.
     pub fn with_findings(json: impl Into<String>) -> FakeRunner {
         FakeRunner::new(vec![FakeResponse::findings(json)])
     }
 
-    /// Спеки всех состоявшихся вызовов — по ним тесты проверяют промпт и монтирование.
+    /// Specs of every call made — tests use them to check the prompt and the mounts.
     pub fn calls(&self) -> Vec<RunSpec> {
         self.calls.lock().expect("mutex").clone()
     }
@@ -103,7 +103,7 @@ impl FakeRunner {
         self.calls.lock().expect("mutex").len()
     }
 
-    /// Копирует все файлы каталога в ответ — для `momulus run --fake-runner <dir>`.
+    /// Turns every file in a directory into a response — for `momulus run --fake-runner <dir>`.
     pub fn from_dir(dir: &std::path::Path) -> Result<FakeRunner> {
         let mut out_files = Vec::new();
         collect(dir, dir, &mut out_files)?;
@@ -153,7 +153,7 @@ impl Runner for FakeRunner {
                         Some(response) => response,
                         None => {
                             return Err(Error::Runner(
-                                "FakeRunner: ответы закончились, а его снова вызвали".into(),
+                                "FakeRunner: ran out of responses but was called again".into(),
                             ));
                         }
                     }
@@ -234,23 +234,23 @@ mod tests {
         std::fs::create_dir_all(&work).unwrap();
 
         let runner = FakeRunner::new(vec![
-            FakeResponse::findings("не json"),
-            FakeResponse::findings(r#"{"summary":"со второй попытки","findings":[]}"#),
+            FakeResponse::findings("not json"),
+            FakeResponse::findings(r#"{"summary":"second time lucky","findings":[]}"#),
         ]);
         runner.run(spec(out.clone(), work.clone())).await.unwrap();
         assert_eq!(
             std::fs::read_to_string(out.join("findings.json")).unwrap(),
-            "не json"
+            "not json"
         );
         runner.run(spec(out.clone(), work.clone())).await.unwrap();
         assert!(
             std::fs::read_to_string(out.join("findings.json"))
                 .unwrap()
-                .contains("со второй попытки")
+                .contains("second time lucky")
         );
 
         let err = runner.run(spec(out, work)).await.unwrap_err();
-        assert!(err.to_string().contains("ответы закончились"), "{err}");
+        assert!(err.to_string().contains("ran out of responses"), "{err}");
     }
 
     #[tokio::test]
@@ -262,7 +262,7 @@ mod tests {
 
         let runner = FakeRunner::new(vec![FakeResponse::patch(
             vec![("posts/hello.en.mdx".into(), "Hello\n".into())],
-            "перевёл одну статью",
+            "translated one post",
         )]);
         runner.run(spec(out.clone(), work.clone())).await.unwrap();
 

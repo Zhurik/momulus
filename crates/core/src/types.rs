@@ -1,4 +1,4 @@
-//! Платформенно-независимые типы, которыми оперирует пайплайн.
+//! Platform-independent types the pipeline works with.
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::command::Command;
 
-/// Идентификатор джобы.
+/// Job identifier.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct JobId(pub Uuid);
 
@@ -19,7 +19,7 @@ impl JobId {
         JobId(Uuid::new_v4())
     }
 
-    /// Короткая форма для сообщений в PR.
+    /// Short form used in PR messages.
     pub fn short(&self) -> String {
         self.0.simple().to_string()[..8].to_string()
     }
@@ -45,50 +45,50 @@ impl std::str::FromStr for JobId {
     }
 }
 
-/// Ссылка на pull request на какой-то платформе.
+/// Reference to a pull request on some platform.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PrRef {
-    /// Идентификатор платформы: "github", "gitlab", ...
+    /// Platform identifier: "github", "gitlab", ...
     pub platform: String,
     pub owner: String,
     pub repo: String,
     pub number: u64,
-    /// SHA головного коммита PR.
+    /// SHA of the PR head commit.
     pub head_sha: String,
-    /// Имя head-ветки (без remote).
+    /// Head branch name (without the remote).
     pub head_ref: String,
-    /// Имя base-ветки.
+    /// Base branch name.
     pub base_ref: String,
-    /// Полное имя репозитория head-а ("owner/repo"); у форка отличается от base.
+    /// Full name of the head repository ("owner/repo"); differs from base for forks.
     pub head_repo: String,
-    /// URL для клонирования base-репозитория.
+    /// Clone URL of the base repository.
     pub clone_url: String,
 }
 
 impl PrRef {
-    /// Полное имя base-репозитория.
+    /// Full name of the base repository.
     pub fn full_name(&self) -> String {
         format!("{}/{}", self.owner, self.repo)
     }
 
-    /// PR открыт из форка — push в head-ветку нам недоступен.
+    /// The PR comes from a fork — we cannot push to its head branch.
     pub fn is_fork(&self) -> bool {
         self.head_repo != self.full_name()
     }
 
-    /// Стабильный ключ репозитория для кэша и курсоров.
+    /// Stable repository key for the cache and cursors.
     pub fn repo_key(&self) -> String {
         format!("{}:{}/{}", self.platform, self.owner, self.repo)
     }
 }
 
-/// Где именно оставлен комментарий с командой.
+/// Where exactly the command comment lives.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CommentKind {
-    /// Обычный комментарий к PR (issue comment).
+    /// Plain PR comment (issue comment).
     Issue,
-    /// Комментарий в треде ревью (review comment).
+    /// Comment inside a review thread (review comment).
     Review,
 }
 
@@ -101,7 +101,7 @@ impl CommentKind {
     }
 }
 
-/// Комментарий, в котором пришла команда.
+/// The comment the command arrived in.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CommentRef {
     pub id: u64,
@@ -110,7 +110,7 @@ pub struct CommentRef {
     pub url: Option<String>,
 }
 
-/// Единица работы: одна команда `/llm` из одного комментария.
+/// Unit of work: one `/llm` command from one comment.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Job {
     pub id: JobId,
@@ -140,7 +140,7 @@ impl Job {
     }
 }
 
-/// Минимум, нужный для подтверждения статуса джобы на платформе.
+/// The minimum needed to acknowledge a job's status on the platform.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct JobRef {
     pub id: JobId,
@@ -148,7 +148,7 @@ pub struct JobRef {
     pub comment: CommentRef,
 }
 
-/// Статус джобы в очереди.
+/// Job status in the queue.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum JobStatus {
@@ -185,18 +185,18 @@ impl std::str::FromStr for JobStatus {
     }
 }
 
-/// Отметка о состоянии джобы, которую видно в PR (реакции на комментарий).
+/// Job state as shown in the PR (a reaction on the comment).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AckState {
-    /// Взяли в работу — 👀
+    /// Picked up — 👀
     Received,
-    /// Успех — ✅
+    /// Success — ✅
     Succeeded,
-    /// Провал — ❌
+    /// Failure — ❌
     Failed,
 }
 
-/// Категория замечания.
+/// Finding category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum Severity {
@@ -225,66 +225,66 @@ impl Severity {
     }
 }
 
-/// Одно замечание модели, привязанное к строке файла.
+/// A single model finding, anchored to a line of a file.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Finding {
-    /// Путь к файлу относительно корня репозитория.
+    /// File path relative to the repository root.
     pub path: String,
-    /// Номер строки в новой версии файла (1-based).
+    /// Line number in the new version of the file (1-based).
     pub line: u32,
     pub severity: Severity,
-    /// Текст замечания.
+    /// Finding text.
     pub body: String,
-    /// Предлагаемая замена строки целиком, если применимо.
+    /// Suggested replacement for the whole line, when applicable.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub suggestion: Option<String>,
 }
 
-/// Результат работы скилла в режиме review — ровно то, что пишет модель.
+/// Output of a review-mode skill — exactly what the model writes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ReviewOutput {
-    /// Краткое резюме ревью.
+    /// Short review summary.
     pub summary: String,
     #[serde(default)]
     pub findings: Vec<Finding>,
 }
 
-/// Готовый к публикации патч: изменения уже лежат в worktree.
+/// A patch ready to publish: the changes already live in the worktree.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Patch {
-    /// Рабочая копия с изменениями.
+    /// Working copy holding the changes.
     pub worktree: PathBuf,
-    /// Имя ветки, в которую коммитим.
+    /// Branch name we commit to.
     pub branch: String,
     pub commit_message: String,
-    /// Заголовок будущего PR.
+    /// Title of the PR to be opened.
     pub title: String,
-    /// Тело будущего PR.
+    /// Body of the PR to be opened.
     pub body: String,
-    /// Изменённые файлы (относительные пути).
+    /// Changed files (relative paths).
     pub files: Vec<String>,
 }
 
-/// Куда монтируется рабочая копия внутри контейнера.
+/// How the working copy is mounted inside the container.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mount {
     ReadOnly,
     ReadWrite,
 }
 
-/// Описание единственного LLM-шага.
+/// Description of the single LLM step.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RunSpec {
     pub job_id: JobId,
-    /// Имя скилла: контейнер получает его каталог через `--skill /skills/<name>`.
+    /// Skill name: the container gets its directory via `--skill /skills/<name>`.
     pub skill: String,
-    /// Хостовый путь рабочей копии, монтируется в /work.
+    /// Host path of the working copy, mounted at /work.
     pub workdir: PathBuf,
-    /// Хостовый путь каталога скиллов, монтируется в /skills (ro).
+    /// Host path of the skills directory, mounted at /skills (read-only).
     pub skills_dir: PathBuf,
-    /// Хостовый путь для артефактов, монтируется в /out (rw).
+    /// Host path for artifacts, mounted at /out (read-write).
     pub out_dir: PathBuf,
     pub mount: Mount,
     pub prompt: String,
@@ -295,13 +295,13 @@ pub struct RunSpec {
     pub image: String,
     pub cpu_limit: f64,
     pub memory_limit_mb: u64,
-    /// Переменные окружения контейнера (только ключ LLM-провайдера).
+    /// Container environment variables (the LLM provider key only).
     pub env: Vec<(String, String)>,
-    /// Содержимое `models.json` для pi, если провайдеру нужен свой base URL.
+    /// Contents of pi's `models.json`, when the provider needs its own base URL.
     pub agent_config: Option<String>,
 }
 
-/// Что вернул LLM-шаг.
+/// What the LLM step returned.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RunResult {
     pub exit_code: i64,
@@ -315,7 +315,7 @@ impl RunResult {
         self.exit_code == 0 && !self.timed_out
     }
 
-    /// Совмещённый лог для сохранения в файл джобы.
+    /// Combined log to store in the job's log file.
     pub fn combined_log(&self) -> String {
         format!(
             "=== stdout ===\n{}\n=== stderr ===\n{}\n",

@@ -1652,6 +1652,8 @@ dependencies = [
  "bollard",
  "futures",
  "momulus-core",
+ "momulus-pipeline",
+ "momulus-skills",
  "serde_json",
  "tempfile",
  "tokio",

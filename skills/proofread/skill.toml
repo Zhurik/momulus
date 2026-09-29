@@ -1,7 +1,7 @@
-# Контракт для оркестратора. Инструкции для модели — в SKILL.md.
+# Contract for the orchestrator. Instructions for the model live in SKILL.md.
 mode = "review"
-# write нужен, чтобы записать /out/findings.json; рабочая копия смонтирована
-# только для чтения, так что писать в неё агент всё равно не может.
+# write is needed to produce /out/findings.json; the working copy is mounted
+# read-only, so the agent cannot write into it anyway.
 tools = ["read", "grep", "find", "ls", "write"]
 files = ["**/*.md", "**/*.mdx"]
 args = []

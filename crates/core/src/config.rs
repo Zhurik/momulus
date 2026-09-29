@@ -1,4 +1,4 @@
-//! Конфигурация сервиса: TOML-файл плюс секреты из окружения.
+//! Service configuration: a TOML file plus secrets from the environment.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
 
-/// Имена переменных окружения с секретами.
+/// Names of the environment variables holding secrets.
 pub const ENV_GITHUB_APP_ID: &str = "GITHUB_APP_ID";
 pub const ENV_GITHUB_APP_PRIVATE_KEY_PATH: &str = "GITHUB_APP_PRIVATE_KEY_PATH";
 pub const ENV_LLM_API_KEY: &str = "LLM_API_KEY";
@@ -16,30 +16,30 @@ pub const ENV_LLM_BASE_URL: &str = "LLM_BASE_URL";
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
-    /// Как часто опрашивать платформу.
+    /// How often to poll the platform.
     #[serde(with = "humantime_serde", default = "default_poll_interval")]
     pub poll_interval: Duration,
 
-    /// Сколько джоб выполняем одновременно.
+    /// How many jobs run at the same time.
     #[serde(default = "default_concurrency")]
     pub concurrency: usize,
 
-    /// Логины, которым разрешено запускать команды.
+    /// Logins allowed to issue commands.
     pub allowed_users: Vec<String>,
 
-    /// Белый список репозиториев "owner/repo"; пусто — все установки App.
+    /// Repository allowlist as "owner/repo"; empty means all App installations.
     #[serde(default)]
     pub repos: Vec<String>,
 
-    /// Куда складываем БД, кэш репозиториев, worktree и логи.
+    /// Where the database, repo cache, worktrees and logs live.
     #[serde(default = "default_data_dir")]
     pub data_dir: PathBuf,
 
-    /// Каталог со скиллами.
+    /// Skills directory.
     #[serde(default = "default_skills_dir")]
     pub skills_dir: PathBuf,
 
-    /// Сколько ждать завершения текущих джоб при остановке.
+    /// How long to wait for running jobs on shutdown.
     #[serde(with = "humantime_serde", default = "default_shutdown_timeout")]
     pub shutdown_timeout: Duration,
 
@@ -59,24 +59,24 @@ pub struct Config {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct LlmConfig {
-    /// Провайдер, который передаётся pi (`--provider`).
+    /// Provider passed to pi (`--provider`).
     #[serde(default = "default_provider")]
     pub default_provider: String,
-    /// Модель по умолчанию; скилл может переопределить.
+    /// Default model; a skill may override it.
     #[serde(default = "default_model")]
     pub default_model: String,
-    /// Имя переменной окружения, в которой pi ждёт ключ провайдера.
-    /// Пусто — выводим из имени провайдера (cloudru -> CLOUDRU_API_KEY).
+    /// Name of the environment variable pi reads the provider key from.
+    /// Empty means it is derived from the provider name (openai -> OPENAI_API_KEY).
     #[serde(default)]
     pub api_key_env: Option<String>,
 
-    /// Протокол провайдера для pi: нужен, когда провайдер не встроен в pi
-    /// и описывается через models.json. Пусто — провайдер встроенный.
+    /// Provider protocol for pi: needed when the provider is not built into pi
+    /// and has to be described in models.json. Empty means a built-in provider.
     #[serde(default)]
     pub api: Option<ProviderApi>,
 }
 
-/// Протоколы, которые умеет pi (значение поля `api` в models.json).
+/// Protocols pi supports (the `api` field in models.json).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ProviderApi {
@@ -104,21 +104,21 @@ impl ProviderApi {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DockerConfig {
-    /// Образ с pi.
+    /// Image containing pi.
     #[serde(default = "default_runner_image")]
     pub runner_image: String,
-    /// Ограничение CPU в ядрах.
+    /// CPU limit in cores.
     #[serde(default = "default_cpu")]
     pub cpu: f64,
-    /// Ограничение памяти в мегабайтах.
+    /// Memory limit in megabytes.
     #[serde(default = "default_memory_mb")]
     pub memory_mb: u64,
-    /// Адрес демона; пусто — как в окружении (DOCKER_HOST или сокет по умолчанию).
+    /// Daemon address; empty means the environment default (DOCKER_HOST or the default socket).
     #[serde(default)]
     pub host: Option<String>,
-    /// Пользователь внутри контейнера ("1000:1000"); пусто — как в образе.
-    /// Нужен, когда uid сервиса на хосте не совпадает с uid в образе:
-    /// иначе pi не сможет писать в смонтированный /out.
+    /// User inside the container ("1000:1000"); empty means the image default.
+    /// Needed when the service uid on the host differs from the uid in the image:
+    /// otherwise pi cannot write to the mounted /out.
     #[serde(default)]
     pub user: Option<String>,
 }
@@ -126,18 +126,18 @@ pub struct DockerConfig {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct GithubConfig {
-    /// База REST API (переопределяется для GitHub Enterprise и тестов).
+    /// REST API base (overridden for GitHub Enterprise and for tests).
     #[serde(default = "default_github_api")]
     pub api_base: String,
-    /// Имя автора коммитов бота.
+    /// Author name for the bot's commits.
     #[serde(default = "default_bot_name")]
     pub bot_name: String,
-    /// Почта автора коммитов бота.
+    /// Author email for the bot's commits.
     #[serde(default = "default_bot_email")]
     pub bot_email: String,
 }
 
-/// Ограничения на размер входа — защита от гигантских PR.
+/// Input size limits — protection against huge PRs.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Limits {
@@ -165,13 +165,10 @@ fn default_shutdown_timeout() -> Duration {
     Duration::from_secs(300)
 }
 fn default_provider() -> String {
-    "cloudru".to_string()
+    "openai".to_string()
 }
 fn default_model() -> String {
-    "zai-org/GLM-5.1".to_string()
-}
-fn default_api() -> Option<ProviderApi> {
-    Some(ProviderApi::OpenaiCompletions)
+    "gpt-5.1".to_string()
 }
 fn default_runner_image() -> String {
     "momulus-runner:latest".to_string()
@@ -207,7 +204,7 @@ impl Default for LlmConfig {
             default_provider: default_provider(),
             default_model: default_model(),
             api_key_env: None,
-            api: default_api(),
+            api: None,
         }
     }
 }
@@ -245,7 +242,7 @@ impl Default for Limits {
 }
 
 impl LlmConfig {
-    /// Имя переменной окружения с ключом провайдера.
+    /// Name of the environment variable holding the provider key.
     pub fn api_key_env(&self) -> String {
         if let Some(name) = &self.api_key_env {
             return name.clone();
@@ -253,16 +250,16 @@ impl LlmConfig {
         provider_key_env(&self.default_provider)
     }
 
-    /// Нужно ли описывать провайдера через models.json.
+    /// Whether the provider has to be described in models.json.
     pub fn needs_models_json(&self) -> bool {
         self.api.is_some()
     }
 
-    /// Проверяет, что провайдера хватит для запуска pi.
+    /// Checks that the provider description is complete enough to run pi.
     pub fn check_ready(&self, base_url: Option<&str>) -> Result<()> {
         if self.needs_models_json() && base_url.is_none_or(str::is_empty) {
             return Err(Error::Config(format!(
-                "провайдер {:?} описан через llm.api = {:?}, значит нужен {ENV_LLM_BASE_URL}",
+                "provider {:?} is described by llm.api = {:?}, so {ENV_LLM_BASE_URL} is required",
                 self.default_provider,
                 self.api.map(|a| a.as_str()).unwrap_or_default()
             )));
@@ -271,7 +268,7 @@ impl LlmConfig {
     }
 }
 
-/// Переменная окружения, в которой pi ищет ключ конкретного провайдера.
+/// The environment variable pi looks for a given provider's key in.
 pub fn provider_key_env(provider: &str) -> String {
     match provider {
         "google" | "gemini" => "GEMINI_API_KEY".to_string(),
@@ -284,7 +281,7 @@ pub fn provider_key_env(provider: &str) -> String {
 }
 
 impl Config {
-    /// Читает и валидирует конфиг.
+    /// Reads and validates the config.
     pub fn load(path: &Path) -> Result<Config> {
         let text = std::fs::read_to_string(path)
             .map_err(|e| Error::Config(format!("cannot read {}: {e}", path.display())))?;
@@ -329,14 +326,14 @@ impl Config {
         Ok(())
     }
 
-    /// Разрешён ли пользователь запускать команды (сравнение регистронезависимое).
+    /// Whether the user may issue commands (case-insensitive comparison).
     pub fn is_allowed_user(&self, login: &str) -> bool {
         self.allowed_users
             .iter()
             .any(|u| u.eq_ignore_ascii_case(login))
     }
 
-    /// Разрешён ли репозиторий; пустой список — разрешены все.
+    /// Whether the repository is allowed; an empty list allows everything.
     pub fn is_allowed_repo(&self, full_name: &str) -> bool {
         self.repos.is_empty() || self.repos.iter().any(|r| r.eq_ignore_ascii_case(full_name))
     }
@@ -358,7 +355,7 @@ impl Config {
     }
 }
 
-/// Секреты. Никогда не логируются и не попадают в Debug целиком.
+/// Secrets. Never logged and never fully shown in Debug output.
 #[derive(Clone, Default)]
 pub struct Secrets {
     pub github_app_id: Option<u64>,
@@ -379,7 +376,7 @@ impl std::fmt::Debug for Secrets {
 }
 
 impl Secrets {
-    /// Читает секреты из окружения.
+    /// Reads the secrets from the environment.
     pub fn from_env() -> Result<Secrets> {
         let github_app_id = match std::env::var(ENV_GITHUB_APP_ID) {
             Ok(value) => Some(value.trim().parse::<u64>().map_err(|e| {
@@ -401,7 +398,7 @@ impl Secrets {
         })
     }
 
-    /// Секреты, нужные для работы с GitHub.
+    /// Secrets required to talk to GitHub.
     pub fn require_github(&self) -> Result<(u64, PathBuf)> {
         let app_id = self
             .github_app_id
@@ -412,14 +409,14 @@ impl Secrets {
         Ok((app_id, key))
     }
 
-    /// Ключ LLM-провайдера.
+    /// LLM provider key.
     pub fn require_llm_api_key(&self) -> Result<&str> {
         self.llm_api_key
             .as_deref()
             .ok_or_else(|| Error::Config(format!("{ENV_LLM_API_KEY} is not set")))
     }
 
-    /// Добавляет все известные секреты в редактор логов.
+    /// Adds every known secret to the log redactor.
     pub fn redactor(&self) -> crate::redact::Redactor {
         let mut redactor = crate::redact::Redactor::new();
         if let Some(key) = &self.llm_api_key {
@@ -561,38 +558,37 @@ mod tests {
     }
 
     #[test]
-    fn default_provider_is_cloudru_glm() {
+    fn default_provider_is_a_builtin_one() {
         let config = Config::from_toml(MINIMAL).unwrap();
-        assert_eq!(config.llm.default_provider, "cloudru");
-        assert_eq!(config.llm.default_model, "zai-org/GLM-5.1");
-        assert_eq!(config.llm.api, Some(ProviderApi::OpenaiCompletions));
-        assert_eq!(config.llm.api_key_env(), "CLOUDRU_API_KEY");
+        assert_eq!(config.llm.default_provider, "openai");
+        assert_eq!(config.llm.default_model, "gpt-5.1");
+        assert_eq!(config.llm.api, None);
+        assert_eq!(config.llm.api_key_env(), "OPENAI_API_KEY");
     }
 
     #[test]
     fn custom_provider_requires_base_url() {
-        let config = Config::from_toml(MINIMAL).unwrap();
+        let config = Config::from_toml(
+            r#"
+            allowed_users = ["zhurik"]
+            [llm]
+            default_provider = "my-gateway"
+            api = "openai-completions"
+        "#,
+        )
+        .unwrap();
         let err = config.llm.check_ready(None).unwrap_err();
         assert!(err.to_string().contains(ENV_LLM_BASE_URL), "{err}");
         assert!(err.to_string().contains("openai-completions"), "{err}");
         config
             .llm
-            .check_ready(Some("https://foundation-models.api.cloud.ru/v1"))
+            .check_ready(Some("https://openrouter.ai/api/v1"))
             .unwrap();
     }
 
     #[test]
     fn builtin_provider_needs_no_base_url() {
-        let config = Config::from_toml(
-            r#"
-            allowed_users = ["zhurik"]
-            [llm]
-            default_provider = "anthropic"
-            default_model = "claude-sonnet-5"
-        "#,
-        )
-        .unwrap();
-        assert_eq!(config.llm.api, None);
+        let config = Config::from_toml(MINIMAL).unwrap();
         assert!(!config.llm.needs_models_json());
         config.llm.check_ready(None).unwrap();
     }

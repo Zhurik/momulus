@@ -1,33 +1,32 @@
 ---
 source: crates/pipeline/src/render.rs
-assertion_line: 322
 expression: out
 ---
-=== нечего делать ===
-Нечего делать: среди изменённых файлов PR нет ни одного под фильтр скилла (`**/*.md`, `**/*.mdx`).
+=== nothing to do ===
+Nothing to do: none of the files changed in this PR match the skill filter (`**/*.md`, `**/*.mdx`).
 
-<sub>скилл `proofread` · job `1a2b3c4d`</sub>
+<sub>skill `proofread` · job `1a2b3c4d`</sub>
 
-=== нет изменений ===
-Скилл отработал, но изменений в файлах нет.
+=== no changes ===
+The skill ran, but no files were changed.
 
-Всё уже переведено.
+Everything is already translated.
 
 
-<sub>скилл `proofread` · job `1a2b3c4d`</sub>
+<sub>skill `proofread` · job `1a2b3c4d`</sub>
 
-=== ошибка ===
-Команда `/llm proofread` не выполнена: модель вернула невалидный JSON дважды
+=== error ===
+The command `/llm proofread` did not run: the model returned invalid JSON twice
 
-<sub>скилл `proofread` · job `1a2b3c4d`</sub>
+<sub>skill `proofread` · job `1a2b3c4d`</sub>
 
-=== слишком много ===
-Команда `/llm proofread` не выполнена: diff PR — 812 КБ при лимите 400 КБ
-Сузь изменения в PR или фильтр файлов в скилле.
+=== too large ===
+The command `/llm proofread` did not run: the PR diff is 812 KB against a 400 KB limit
+Narrow the PR down or tighten the skill's file filter.
 
-<sub>скилл `proofread` · job `1a2b3c4d`</sub>
+<sub>skill `proofread` · job `1a2b3c4d`</sub>
 
-=== форк ===
-Команда `/llm proofread` не выполнена: PR открыт из форка `contributor/blojik`, а у бота нет прав на запись в него. Скиллы в режиме patch работают только для ветвей основного репозитория.
+=== fork ===
+The command `/llm proofread` did not run: this PR comes from the fork `contributor/blojik`, and the bot has no write access there. Patch-mode skills only work on branches of the main repository.
 
-<sub>скилл `proofread` · job `1a2b3c4d`</sub>
+<sub>skill `proofread` · job `1a2b3c4d`</sub>

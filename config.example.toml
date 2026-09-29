@@ -1,52 +1,51 @@
-# Пример конфигурации momulus. Секреты сюда не кладём — они приходят из окружения:
-#   GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY_PATH, LLM_API_KEY, LLM_BASE_URL.
+# Example momulus configuration. Secrets do not belong here — they come from the
+# environment: GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY_PATH, LLM_API_KEY, LLM_BASE_URL.
 
-# Как часто опрашиваем GitHub на новые команды.
+# How often we poll GitHub for new commands.
 poll_interval = "45s"
 
-# Сколько джоб выполняем одновременно.
+# How many jobs run at the same time.
 concurrency = 1
 
-# Кому разрешено запускать команды. Остальные комментарии игнорируются молча.
-allowed_users = ["zhurik"]
+# Who may issue commands. Comments from anyone else are ignored silently.
+allowed_users = ["your-github-login"]
 
-# Необязательный белый список репозиториев. Пусто — все репозитории установки App.
+# Optional repository allowlist. Empty means every repository of the installation.
 repos = []
 
-# Данные сервиса: SQLite, кэш репозиториев, worktree, логи джоб.
-# В docker-compose путь должен совпадать с хостовым (см. README): демон монтирует
-# рабочую копию в контейнер с pi и понимает только хостовые пути.
+# Service data: SQLite, the repository cache, worktrees and job logs.
+# Under docker-compose this path must match the host path (see README): the daemon
+# mounts the working copy into the pi container and only understands host paths.
 data_dir = "/srv/momulus/data"
 
-# Каталог со скиллами (SKILL.md + skill.toml). Тоже монтируется в контейнер.
+# Skills directory (SKILL.md + skill.toml). It is mounted into the container too.
 skills_dir = "/srv/momulus/skills"
 
-# Сколько ждём завершения текущих джоб при остановке.
+# How long we wait for running jobs on shutdown.
 shutdown_timeout = "5m"
 
 [llm]
-# Провайдер и модель по умолчанию, передаются pi. Скилл может переопределить модель.
-# Здесь — OpenAI-совместимый шлюз Cloud.ru Foundation Models с GLM-5.1.
-default_provider = "cloudru"
-default_model = "zai-org/GLM-5.1"
+# Default provider and model, both passed to pi. A skill may override the model.
+# "openai" is built into pi, so no base URL is required.
+default_provider = "openai"
+default_model = "gpt-5.1"
 
-# Протокол провайдера. Задавать нужно только для провайдеров, которых нет среди
-# встроенных в pi: тогда momulus опишет его в models.json контейнера, а base URL
-# возьмёт из LLM_BASE_URL (для Cloud.ru — https://foundation-models.api.cloud.ru/v1).
-# Для встроенного провайдера (anthropic, openai, google, ...) поле нужно убрать.
-api = "openai-completions"
+# Provider protocol. Only needed for providers pi does not know about: momulus
+# then describes them in the container's models.json and takes the endpoint from
+# LLM_BASE_URL. For a built-in provider (openai, anthropic, google, ...) leave it out.
+# api = "openai-completions"
 
-# Имя переменной окружения, в которой pi ждёт ключ.
-# Пусто — выводится из имени провайдера: cloudru -> CLOUDRU_API_KEY.
-# api_key_env = "CLOUDRU_API_KEY"
+# Name of the environment variable pi reads the key from.
+# Empty means it is derived from the provider name: openai -> OPENAI_API_KEY.
+# api_key_env = "OPENAI_API_KEY"
 
 [docker]
 runner_image = "momulus-runner:latest"
 cpu = 2.0
 memory_mb = 2048
 # host = "unix:///var/run/docker.sock"
-# Пользователь внутри контейнера с pi. Нужен, если uid сервиса на хосте
-# не совпадает с uid в образе: иначе pi не сможет писать в /out.
+# User inside the pi container. Needed when the service uid on the host differs
+# from the uid in the image: otherwise pi cannot write to /out.
 # user = "1000:1000"
 
 [github]
@@ -55,7 +54,7 @@ bot_name = "momulus"
 bot_email = "momulus@users.noreply.github.com"
 
 [limits]
-# Слишком большой PR — отказ с комментарием, без вызова LLM.
+# An oversized PR is refused with a comment, without calling the model.
 max_diff_bytes = 400000
 max_file_bytes = 200000
 max_changed_files = 100

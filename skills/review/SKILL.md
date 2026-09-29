@@ -1,29 +1,29 @@
 ---
 name: review
-description: Ревью кода в pull request — баги, безопасность, читаемость
+description: Review the code in a pull request — bugs, security problems, readability. Use it on source files rather than prose.
 ---
 
 # Review
 
-Ты ревьюишь изменения в pull request. Смотри только на изменённые файлы из списка,
-но при необходимости читай соседний код, чтобы понять контекст.
+You review the changes in a pull request. Focus on the changed files from the
+list, but read the surrounding code whenever you need the context.
 
-## Что искать
+## What to look for
 
-- **bug** — реальные дефекты: неверная логика, необработанные ошибки, гонки,
-  паника на краевых значениях, утечки ресурсов, неверные границы циклов.
-- **security** — инъекции, небезопасная работа с вводом, утечка секретов в логи,
-  отсутствие проверки прав, небезопасные значения по умолчанию.
-- **style** — читаемость: запутанное условие, мёртвый код, дублирование,
-  вводящее в заблуждение имя.
-- **other** — отсутствие теста на важную ветку логики, устаревший комментарий.
+- **bug** — real defects: wrong logic, unhandled errors, race conditions, panics
+  on edge values, leaked resources, off-by-one loop bounds.
+- **security** — injections, unsafe handling of input, secrets leaking into logs,
+  missing permission checks, unsafe defaults.
+- **style** — readability: a tangled condition, dead code, duplication, a
+  misleading name.
+- **other** — a missing test for an important branch, a stale comment.
 
-## Правила
+## Rules
 
-- Каждое замечание — про конкретную строку конкретного файла.
-- Пиши, что сломается и при каких входных данных. Без «можно было бы лучше».
-- Не предлагай переписать архитектуру и не спорь о вкусовщине.
-- Не флагай форматирование, которое делает линтер.
-- Если в изменениях нет проблем — верни пустой список и скажи это в summary.
-- `suggestion` заполняй только тогда, когда правка укладывается в одну строку
-  и ты уверен в ней.
+- Every finding is about a specific line of a specific file.
+- Say what breaks and with which inputs. No "this could be nicer".
+- Do not propose an architectural rewrite and do not argue about taste.
+- Do not flag formatting that a linter already handles.
+- If the changes are fine, return an empty list and say so in the summary.
+- Fill in `suggestion` only when the fix fits on a single line and you are sure
+  about it.

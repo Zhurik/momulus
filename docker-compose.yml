@@ -1,20 +1,18 @@
-# Разворачивание momulus на одной машине.
+# Deploying momulus on a single machine.
 #
-# Пути на хосте и в контейнере СОВПАДАЮТ намеренно: сервис просит docker-демон
-# смонтировать рабочую копию в контейнер с pi, а демон живёт на хосте и видит
-# только хостовые пути. Поэтому data_dir и skills_dir задаются абсолютными
-# путями и монтируются «сами в себя».
+# Host and container paths are identical on purpose: the service asks the docker
+# daemon to mount the working copy into the pi container, and the daemon lives on
+# the host and only sees host paths. That is why data_dir and skills_dir are
+# absolute and mounted onto themselves.
 #
-# Перед первым запуском:
-#   export MOMULUS_ROOT=/srv/momulus         # где лежат data/, skills/, config.toml
+# Before the first run:
+#   export MOMULUS_ROOT=/srv/momulus          # holds data/, skills/, config.toml
 #   mkdir -p $MOMULUS_ROOT/{data,secrets}
 #   cp config.example.toml $MOMULUS_ROOT/config.toml
 #   cp -r skills $MOMULUS_ROOT/skills
 #   cp ~/github-app.private-key.pem $MOMULUS_ROOT/secrets/github-app.pem
-#   docker compose --profile build build     # собрать образ раннера с pi
+#   docker compose --profile build build      # build the pi runner image
 #   docker compose up -d
-
-x-root: &root ${MOMULUS_ROOT:-/srv/momulus}
 
 services:
   momulus:
@@ -23,9 +21,9 @@ services:
       dockerfile: docker/Dockerfile
     image: momulus:latest
     restart: unless-stopped
-    # Нужен доступ к docker-демону: сервис запускает контейнеры с pi на каждую
-    # джобу. Это фактически права root на хосте — в README описан вариант
-    # с docker-socket-proxy, который сужает набор разрешённых эндпоинтов.
+    # Needs access to the docker daemon: the service starts one pi container per
+    # job. That is effectively root on the host — the README describes the
+    # docker-socket-proxy variant, which narrows the allowed endpoints down.
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${MOMULUS_ROOT:-/srv/momulus}/data:${MOMULUS_ROOT:-/srv/momulus}/data
@@ -35,17 +33,20 @@ services:
       - github_app_key
     environment:
       MOMULUS_CONFIG: /etc/momulus/config.toml
-      GITHUB_APP_ID: ${GITHUB_APP_ID:?нужен id GitHub App}
+      GITHUB_APP_ID: ${GITHUB_APP_ID:?the GitHub App id is required}
       GITHUB_APP_PRIVATE_KEY_PATH: /run/secrets/github_app_key
-      LLM_API_KEY: ${LLM_API_KEY:?нужен ключ LLM-провайдера}
-      LLM_BASE_URL: ${LLM_BASE_URL:-https://foundation-models.api.cloud.ru/v1}
+      LLM_API_KEY: ${LLM_API_KEY:?the LLM provider key is required}
+      # Only needed for an OpenAI-compatible gateway; leave unset for a provider
+      # pi already knows (openai, anthropic, google, ...).
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
       RUST_LOG: ${RUST_LOG:-info}
     command: ["serve", "--log-format", "json"]
-    # Сервис держит только SQLite и git: 512 МБ хватает, память нужна раннеру.
+    # The service only holds SQLite and git: 512 MB is plenty, the runner is the
+    # one that needs memory.
     mem_limit: 512m
     cpus: 1.0
 
-  # Сборка образа с pi. Не запускается: `docker compose --profile build build`.
+  # Builds the image with pi. Never started: `docker compose --profile build build`.
   runner-image:
     build:
       context: .

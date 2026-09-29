@@ -1,7 +1,7 @@
-//! Тонкая обёртка над `git` через `tokio::process::Command`.
+//! A thin wrapper around `git` built on `tokio::process::Command`.
 //!
-//! Токен никогда не попадает ни в URL на диске, ни в аргументы команды:
-//! он передаётся в credential helper через переменную окружения.
+//! The token never reaches an on-disk URL or the command line: it is handed to
+//! a credential helper through an environment variable.
 
 use std::ffi::OsStr;
 use std::path::Path;
@@ -10,10 +10,10 @@ use std::process::Stdio;
 use momulus_core::{Error, Redactor, Result};
 use tokio::process::Command;
 
-/// Переменная, из которой credential helper берёт пароль.
+/// The variable the credential helper reads the password from.
 const TOKEN_ENV: &str = "MOMULUS_GIT_TOKEN";
 
-/// Credential helper, который отдаёт токен из окружения и ничего не пишет на диск.
+/// A credential helper that echoes the token from the environment and writes nothing to disk.
 const CREDENTIAL_HELPER: &str = concat!(
     "!f() { ",
     "echo username=x-access-token; ",
@@ -21,7 +21,7 @@ const CREDENTIAL_HELPER: &str = concat!(
     "}; f"
 );
 
-/// Результат выполнения git.
+/// Result of running git.
 #[derive(Debug, Clone)]
 pub struct GitOutput {
     pub stdout: String,
@@ -29,18 +29,18 @@ pub struct GitOutput {
 }
 
 impl GitOutput {
-    /// stdout без хвостового перевода строки.
+    /// stdout without the trailing newline.
     pub fn trimmed(&self) -> &str {
         self.stdout.trim_end_matches(['\n', '\r'])
     }
 
-    /// Непустые строки stdout.
+    /// Non-empty lines of stdout.
     pub fn lines(&self) -> impl Iterator<Item = &str> {
         self.stdout.lines().filter(|line| !line.is_empty())
     }
 }
 
-/// Запускает git, маскируя секреты во всём, что уходит в логи и ошибки.
+/// Runs git, masking secrets in everything that reaches logs and errors.
 #[derive(Debug, Clone, Default)]
 pub struct Git {
     redactor: Redactor,
@@ -55,7 +55,7 @@ impl Git {
         &self.redactor
     }
 
-    /// Запускает git без доступа к сети (или с уже настроенными креденшлами).
+    /// Runs git without network access (or with credentials already in place).
     pub async fn run<I, S>(&self, cwd: Option<&Path>, args: I) -> Result<GitOutput>
     where
         I: IntoIterator<Item = S>,
@@ -64,7 +64,7 @@ impl Git {
         self.run_inner(cwd, args, None).await
     }
 
-    /// Запускает git с токеном для доступа к удалённому репозиторию.
+    /// Runs git with a token for accessing the remote repository.
     pub async fn run_with_token<I, S>(
         &self,
         cwd: Option<&Path>,
@@ -91,8 +91,8 @@ impl Git {
         let mut command = Command::new("git");
         command
             .env("GIT_TERMINAL_PROMPT", "0")
-            // Без пользовательских конфигов: поведение одинаковое у разработчика,
-            // в контейнере и в тестах.
+            // No user configs: behaviour is identical on a developer machine,
+            // inside the container and in tests.
             .env("GIT_CONFIG_NOSYSTEM", "1")
             .env("GIT_CONFIG_GLOBAL", "/dev/null")
             .stdin(Stdio::null())
@@ -120,7 +120,7 @@ impl Git {
 
         let output = command.output().await.map_err(|e| {
             Error::Git(format!(
-                "{printable}: не удалось запустить git: {}",
+                "{printable}: could not start git: {}",
                 self.redactor.redact(&e.to_string())
             ))
         })?;
@@ -132,7 +132,7 @@ impl Git {
 
         if !output.status.success() {
             let message = format!(
-                "{printable} завершился с кодом {}: {}",
+                "{printable} exited with code {}: {}",
                 output.status.code().unwrap_or(-1),
                 stderr.trim()
             );
@@ -150,7 +150,7 @@ impl Git {
     }
 }
 
-/// Похоже ли на временную сетевую проблему (тогда джобу можно повторить).
+/// Whether this looks like a temporary network problem (then the job can be retried).
 fn is_transient(stderr: &str) -> bool {
     const MARKERS: [&str; 8] = [
         "could not resolve host",

@@ -1,4 +1,4 @@
-//! Воркер: берёт джобы из очереди, выполняет их и ведёт статусы.
+//! Worker: claims jobs from the queue, runs them and maintains their status.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -11,35 +11,35 @@ use tokio_util::sync::CancellationToken;
 
 use crate::Store;
 
-/// Что воркер делает с джобой. Реализуется пайплайном.
+/// What the worker does with a job. Implemented by the pipeline.
 #[async_trait]
 pub trait JobHandler: Send + Sync {
-    /// Выполняет джобу. Ошибку воркер классифицирует сам.
+    /// Runs the job. The worker classifies the error itself.
     async fn handle(&self, job: &Job) -> Result<()>;
 
-    /// Отмечает состояние джобы на платформе (реакция на комментарий).
+    /// Marks the job state on the platform (a reaction on the comment).
     async fn ack(&self, job: &Job, state: AckState) -> Result<()> {
         let _ = (job, state);
         Ok(())
     }
 
-    /// Пишет в PR причину провала.
+    /// Posts the failure reason to the PR.
     async fn report_error(&self, job: &Job, error: &Error) -> Result<()> {
         let _ = (job, error);
         Ok(())
     }
 }
 
-/// Настройки воркера.
+/// Worker settings.
 #[derive(Debug, Clone, Copy)]
 pub struct WorkerConfig {
-    /// Сколько джоб выполняем одновременно.
+    /// How many jobs run at the same time.
     pub concurrency: usize,
-    /// Максимум попыток на джобу: первая плюс два повтора транзиентных ошибок.
+    /// Maximum attempts per job: the first one plus two retries of transient errors.
     pub max_attempts: u32,
-    /// Сколько ждём завершения текущих джоб при остановке.
+    /// How long we wait for running jobs on shutdown.
     pub shutdown_timeout: Duration,
-    /// Как часто заглядываем в очередь, если никто не разбудил.
+    /// How often we peek into the queue when nothing woke us up.
     pub idle_tick: Duration,
 }
 
@@ -54,12 +54,12 @@ impl Default for WorkerConfig {
     }
 }
 
-/// Воркер очереди.
+/// The queue worker.
 pub struct Worker {
     store: Store,
     handler: Arc<dyn JobHandler>,
     config: WorkerConfig,
-    /// Будит диспетчер, когда в очередь попала новая джоба.
+    /// Wakes the dispatcher when a new job lands in the queue.
     wake: Arc<Notify>,
 }
 
@@ -73,10 +73,9 @@ impl Worker {
         }
     }
 
-    /// Работает до отмены: принимает джобы из канала и выполняет их.
+    /// Runs until cancelled: accepts jobs from the channel and executes them.
     ///
-    /// При старте всё, что осталось в `running` после падения сервиса,
-    /// возвращается в очередь.
+    /// On start, anything left in `running` after a crash goes back to the queue.
     pub async fn run(
         &self,
         mut rx: mpsc::Receiver<Job>,
@@ -84,7 +83,7 @@ impl Worker {
     ) -> Result<()> {
         let recovered = self.store.recover_running().await?;
         if recovered > 0 {
-            tracing::info!(recovered, "джобы из прошлого запуска возвращены в очередь");
+            tracing::info!(recovered, "jobs from the previous run were requeued");
         }
 
         let semaphore = Arc::new(Semaphore::new(self.config.concurrency));
@@ -92,7 +91,7 @@ impl Worker {
         let mut inbox_open = true;
 
         loop {
-            // Разбираем очередь, пока есть свободные слоты и есть что брать.
+            // Drain the queue while there are free slots and work to take.
             while !shutdown.is_cancelled() {
                 let Ok(permit) = semaphore.clone().try_acquire_owned() else {
                     break;
@@ -120,37 +119,37 @@ impl Worker {
             }
 
             tokio::select! {
-                // Новая джоба от триггера.
+                // A new job from the trigger.
                 received = rx.recv(), if inbox_open => match received {
                     Some(job) => {
                         let id = job.id;
                         match self.store.enqueue(&job).await {
                             Ok(true) => {
-                                tracing::info!(job = %id, skill = %job.command.skill, "джоба принята");
+                                tracing::info!(job = %id, skill = %job.command.skill, "job accepted");
                             }
                             Ok(false) => {
-                                tracing::debug!(comment = job.comment.id, "джоба на этот комментарий уже есть");
+                                tracing::debug!(comment = job.comment.id, "a job for this comment already exists");
                             }
-                            Err(err) => tracing::error!(error = %err, "джоба не сохранена"),
+                            Err(err) => tracing::error!(error = %err, "the job was not stored"),
                         }
                     }
                     None => {
-                        tracing::debug!("канал джоб закрыт");
+                        tracing::debug!("the job channel is closed");
                         inbox_open = false;
                     }
                 },
-                // Джоба завершилась — освободился слот.
+                // A job finished — a slot is free again.
                 _ = self.wake.notified() => {}
-                // Кто-то мог положить джобу мимо канала (например, ретрай).
+                // A job may have been queued outside the channel (a retry, say).
                 _ = tokio::time::sleep(self.config.idle_tick) => {}
                 _ = shutdown.cancelled() => break,
             }
         }
 
-        // Останов: новых джоб не берём, текущие дожидаем с таймаутом.
+        // Shutdown: take no new jobs, wait for the running ones with a timeout.
         let pending = running.len();
         if pending > 0 {
-            tracing::info!(pending, "ждём завершения текущих джоб");
+            tracing::info!(pending, "waiting for the running jobs to finish");
         }
         let wait = tokio::time::timeout(self.config.shutdown_timeout, async {
             while running.join_next().await.is_some() {}
@@ -158,20 +157,20 @@ impl Worker {
         if wait.await.is_err() {
             tracing::warn!(
                 timeout_s = self.config.shutdown_timeout.as_secs(),
-                "джобы не успели завершиться, прерываем"
+                "jobs did not finish in time, aborting them"
             );
             running.shutdown().await;
         }
         Ok(())
     }
 
-    /// Ручка для тестов и для ретраев: разбудить диспетчер.
+    /// A handle for tests and retries: wake the dispatcher.
     pub fn wake(&self) {
         self.wake.notify_one();
     }
 }
 
-/// Выполняет одну джобу и записывает её статус.
+/// Runs a single job and records its status.
 async fn run_one(
     store: Store,
     handler: Arc<dyn JobHandler>,
@@ -183,9 +182,9 @@ async fn run_one(
     let attempt = stored.attempts;
 
     if attempt == 1 {
-        // Реакция 👀 ставится один раз, на первой попытке.
+        // The 👀 reaction is set once, on the first attempt.
         if let Err(err) = handler.ack(&job, AckState::Received).await {
-            tracing::warn!(job = %job.id, error = %err, "не удалось отметить взятие джобы");
+            tracing::warn!(job = %job.id, error = %err, "could not acknowledge picking up the job");
         }
     }
 
@@ -199,22 +198,22 @@ async fn run_one(
                 job = %job.id,
                 attempt,
                 error = %err,
-                "транзиентная ошибка, вернём джобу в очередь"
+                "transient error, requeueing the job"
             );
             if let Err(err) = store.requeue(job.id, &err.to_string()).await {
-                tracing::error!(job = %job.id, error = %err, "не удалось вернуть джобу в очередь");
+                tracing::error!(job = %job.id, error = %err, "could not requeue the job");
             }
         }
         Err(err) => {
-            tracing::error!(job = %job.id, attempt, error = %err, "джоба провалилась");
+            tracing::error!(job = %job.id, attempt, error = %err, "the job failed");
             if let Err(err) = store.mark_failed(job.id, &err.to_string(), None).await {
-                tracing::error!(error = %err, "статус джобы не записан");
+                tracing::error!(error = %err, "the job status was not recorded");
             }
             if let Err(report) = handler.report_error(&job, &err).await {
-                tracing::warn!(error = %report, "не удалось сообщить об ошибке в PR");
+                tracing::warn!(error = %report, "could not report the error to the PR");
             }
             if let Err(err) = handler.ack(&job, AckState::Failed).await {
-                tracing::warn!(error = %err, "не удалось поставить отметку о провале");
+                tracing::warn!(error = %err, "could not set the failure reaction");
             }
         }
     }
@@ -223,14 +222,14 @@ async fn run_one(
 
 async fn finish_ok(store: &Store, handler: &Arc<dyn JobHandler>, job: &Job) {
     if let Err(err) = store.mark_done(job.id, None).await {
-        tracing::error!(job = %job.id, error = %err, "статус джобы не записан");
+        tracing::error!(job = %job.id, error = %err, "the job status was not recorded");
     }
     if let Err(err) = handler.ack(job, AckState::Succeeded).await {
-        tracing::warn!(error = %err, "не удалось поставить отметку об успехе");
+        tracing::warn!(error = %err, "could not set the success reaction");
     }
 }
 
-/// Полезно тестам: проверить, что джоба существует и в каком она статусе.
+/// Handy for tests: check that a job exists and what status it is in.
 pub async fn status_of(store: &Store, id: JobId) -> Result<Option<momulus_core::JobStatus>> {
     Ok(store.job(id).await?.map(|stored| stored.status))
 }

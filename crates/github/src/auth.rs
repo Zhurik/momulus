@@ -1,4 +1,4 @@
-//! Аутентификация GitHub App: JWT приложения → installation tokens.
+//! GitHub App authentication: the app JWT → installation tokens.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -11,21 +11,21 @@ use octocrab::Octocrab;
 use octocrab::models::{AppId, InstallationId};
 use tokio::sync::Mutex;
 
-/// За сколько до истечения считаем токен просроченным.
+/// How long before expiry we treat a token as stale.
 const EXPIRY_SLACK: Duration = Duration::from_secs(120);
 
-/// Клиент, аутентифицированный как приложение, и фабрика клиентов установок.
+/// A client authenticated as the App, and a factory of installation clients.
 pub struct AppAuth {
-    /// Клиент с JWT приложения: умеет читать установки.
+    /// Client holding the app JWT: it can read installations.
     app: Octocrab,
-    /// Кэш installation-токенов для git-операций.
+    /// Cache of installation tokens used for git operations.
     tokens: Mutex<HashMap<u64, CachedToken>>,
 }
 
 #[derive(Debug, Clone)]
 struct CachedToken {
     token: String,
-    /// Когда токен перестанет быть годным по нашей оценке.
+    /// When we consider the token no longer good.
     good_until: DateTime<Utc>,
 }
 
@@ -36,13 +36,13 @@ impl std::fmt::Debug for AppAuth {
 }
 
 impl AppAuth {
-    /// Собирает клиент приложения из id и PEM-ключа.
+    /// Builds the app client from an id and a PEM key.
     pub fn new(app_id: u64, private_key_pem: &[u8], api_base: &str) -> Result<Arc<AppAuth>> {
         let key = jsonwebtoken::EncodingKey::from_rsa_pem(private_key_pem)
-            .map_err(|e| Error::Config(format!("приватный ключ App не читается: {e}")))?;
+            .map_err(|e| Error::Config(format!("the App private key cannot be read: {e}")))?;
 
-        // Повторы делаем сами (crate::backoff), поэтому встроенные отключаем:
-        // иначе число запросов к API перемножается.
+        // We do our own retries (crate::backoff), so the built-in ones are off:
+        // otherwise the number of API calls multiplies.
         let mut builder = Octocrab::builder()
             .add_retry_config(octocrab::service::middleware::retry::RetryConfig::None)
             .app(AppId(app_id), key);
@@ -53,7 +53,7 @@ impl AppAuth {
         }
         let app = builder
             .build()
-            .map_err(|e| Error::Config(format!("не удалось собрать клиент GitHub: {e}")))?;
+            .map_err(|e| Error::Config(format!("could not build the GitHub client: {e}")))?;
 
         Ok(Arc::new(AppAuth {
             app,
@@ -61,29 +61,29 @@ impl AppAuth {
         }))
     }
 
-    /// Читает ключ из файла.
+    /// Reads the key from a file.
     pub fn from_key_path(app_id: u64, path: &Path, api_base: &str) -> Result<Arc<AppAuth>> {
         let pem = std::fs::read(path)
-            .map_err(|e| Error::Config(format!("ключ App {}: {e}", path.display())))?;
+            .map_err(|e| Error::Config(format!("App key {}: {e}", path.display())))?;
         AppAuth::new(app_id, &pem, api_base)
     }
 
-    /// Клиент с JWT приложения.
+    /// The client holding the app JWT.
     pub fn app_client(&self) -> &Octocrab {
         &self.app
     }
 
-    /// Клиент установки: им делаем все обычные вызовы API.
+    /// Installation client: every ordinary API call goes through it.
     pub fn installation_client(&self, installation_id: u64) -> Result<Octocrab> {
         self.app
             .installation(InstallationId(installation_id))
-            .map_err(|e| Error::Internal(format!("клиент установки: {e}")))
+            .map_err(|e| Error::Internal(format!("installation client: {e}")))
     }
 
-    /// Installation-токен для git: кэшируется до истечения.
+    /// Installation token for git: cached until it expires.
     ///
-    /// Токен нужен только `git fetch`/`push`, поэтому наружу отдаётся строкой,
-    /// но нигде не логируется.
+    /// Only `git fetch`/`push` need it, so it is handed out as a plain string,
+    /// but it is never logged.
     pub async fn installation_token(&self, installation_id: u64) -> Result<String> {
         if let Some(cached) = self.tokens.lock().await.get(&installation_id)
             && cached.good_until > Utc::now()
@@ -98,10 +98,10 @@ impl AppAuth {
             .map_err(crate::error::from_octocrab)?;
         let token = secrecy::ExposeSecret::expose_secret(&token).to_string();
 
-        // GitHub выдаёт токен на час; обновляем чуть раньше.
+        // GitHub issues the token for an hour; we refresh a little earlier.
         let good_until = Utc::now()
             + chrono::Duration::from_std(Duration::from_secs(3600) - EXPIRY_SLACK)
-                .expect("интервал валиден");
+                .expect("the interval is valid");
         self.tokens.lock().await.insert(
             installation_id,
             CachedToken {
@@ -112,7 +112,7 @@ impl AppAuth {
         Ok(token)
     }
 
-    /// Сбрасывает кэш токена — например, после 401.
+    /// Drops the cached token — after a 401, for instance.
     pub async fn forget_token(&self, installation_id: u64) {
         self.tokens.lock().await.remove(&installation_id);
     }
@@ -122,10 +122,10 @@ impl AppAuth {
 mod tests {
     use super::*;
 
-    /// Тестовый RSA-ключ (только для юнит-тестов, ничего не защищает).
+    /// A test RSA key (unit tests only; it protects nothing).
     const TEST_KEY: &str = include_str!("../tests/data/test-app-key.pem");
 
-    // Клиент octocrab строит tower-сервис, которому нужен реактор tokio.
+    // The octocrab client builds a tower service, which needs a tokio reactor.
     #[tokio::test]
     async fn builds_app_client_from_pem() {
         let auth = AppAuth::new(12345, TEST_KEY.as_bytes(), "https://api.github.com").unwrap();
@@ -135,12 +135,12 @@ mod tests {
     #[tokio::test]
     async fn rejects_broken_pem() {
         let err = AppAuth::new(1, b"not a key", "").unwrap_err();
-        assert!(err.to_string().contains("приватный ключ"), "{err}");
+        assert!(err.to_string().contains("private key"), "{err}");
     }
 
     #[tokio::test]
     async fn reports_missing_key_file() {
         let err = AppAuth::from_key_path(1, Path::new("/definitely/not/here.pem"), "").unwrap_err();
-        assert!(err.to_string().contains("ключ App"), "{err}");
+        assert!(err.to_string().contains("App key"), "{err}");
     }
 }

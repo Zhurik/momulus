@@ -1,4 +1,4 @@
-//! Рабочие копии: кэш bare-клонов, worktree на джобу и разбор diff.
+//! Working copies: bare clone cache, one worktree per job, and diff parsing.
 
 pub mod diff;
 pub mod git;

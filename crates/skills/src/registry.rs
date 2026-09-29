@@ -1,4 +1,4 @@
-//! Реестр скиллов: читает каталог, валидирует контракты, отдаёт help.
+//! Skill registry: reads the directory, validates contracts, renders help.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -7,16 +7,16 @@ use crate::contract::{Mode, SkillContract};
 use crate::doc::SkillDoc;
 use crate::error::{SkillError, SkillResult};
 
-/// Имя файла с контрактом.
+/// Name of the contract file.
 pub const CONTRACT_FILE: &str = "skill.toml";
-/// Имя файла с инструкциями для агента.
+/// Name of the file holding the agent instructions.
 pub const DOC_FILE: &str = "SKILL.md";
 
-/// Один скилл: контракт плюс инструкции.
+/// A single skill: contract plus instructions.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Skill {
     pub name: String,
-    /// Каталог скилла на хосте.
+    /// The skill's directory on the host.
     pub dir: PathBuf,
     pub contract: SkillContract,
     pub doc: SkillDoc,
@@ -27,7 +27,7 @@ impl Skill {
         self.contract.mode
     }
 
-    /// Строка для help: `proofread (review) — описание`.
+    /// Help line: `proofread (review) — description`.
     pub fn summary(&self) -> String {
         let args = if self.contract.args.is_empty() {
             String::new()
@@ -49,14 +49,14 @@ impl Skill {
     }
 }
 
-/// Все скиллы каталога.
+/// Every skill in the directory.
 #[derive(Debug, Clone, Default)]
 pub struct Registry {
     root: PathBuf,
     skills: BTreeMap<String, Skill>,
 }
 
-/// Результат чтения каталога вместе с проблемами отдельных скиллов.
+/// The result of reading the directory, together with per-skill problems.
 #[derive(Debug)]
 pub struct LoadReport {
     pub registry: Registry,
@@ -64,7 +64,7 @@ pub struct LoadReport {
 }
 
 impl Registry {
-    /// Читает каталог; любая проблема скилла — ошибка.
+    /// Reads the directory; any skill problem is an error.
     pub fn load(root: &Path) -> SkillResult<Registry> {
         let report = Registry::load_report(root)?;
         match report.errors.into_iter().next() {
@@ -73,11 +73,11 @@ impl Registry {
         }
     }
 
-    /// Читает каталог, собирая все проблемы — для `skills validate`.
+    /// Reads the directory collecting every problem — used by `skills validate`.
     pub fn load_report(root: &Path) -> SkillResult<LoadReport> {
         let entries = std::fs::read_dir(root).map_err(|e| SkillError::Registry {
             path: root.to_path_buf(),
-            message: format!("не читается: {e}"),
+            message: format!("cannot be read: {e}"),
         })?;
 
         let mut dirs: Vec<PathBuf> = Vec::new();
@@ -143,11 +143,11 @@ impl Registry {
         self.skills.is_empty()
     }
 
-    /// Текст подсказки, который бот пишет в PR на непонятную команду.
+    /// The help text the bot posts on an unparseable command.
     pub fn help_text(&self) -> String {
-        let mut out = String::from("Доступные команды:\n\n");
+        let mut out = String::from("Available commands:\n\n");
         if self.skills.is_empty() {
-            out.push_str("_скиллов пока нет_\n");
+            out.push_str("_no skills are installed yet_\n");
             return out;
         }
         for skill in self.skills.values() {
@@ -155,7 +155,7 @@ impl Registry {
             out.push_str(&skill.summary());
             out.push('\n');
         }
-        out.push_str("\nФормат: `/llm <skill> [аргументы]`, например `/llm proofread`.\n");
+        out.push_str("\nFormat: `/llm <skill> [arguments]`, for example `/llm proofread`.\n");
         out
     }
 }
@@ -168,11 +168,11 @@ fn load_skill(dir: &Path) -> SkillResult<Skill> {
     let contract_text =
         std::fs::read_to_string(&contract_path).map_err(|e| SkillError::Contract {
             skill: name.clone(),
-            message: format!("{} не читается: {e}", contract_path.display()),
+            message: format!("{} cannot be read: {e}", contract_path.display()),
         })?;
     let doc_text = std::fs::read_to_string(&doc_path).map_err(|e| SkillError::Doc {
         skill: name.clone(),
-        message: format!("{} не читается: {e}", doc_path.display()),
+        message: format!("{} cannot be read: {e}", doc_path.display()),
     })?;
 
     let contract = SkillContract::parse(&name, &contract_text)?;
@@ -196,7 +196,7 @@ fn name_of(dir: &Path) -> String {
 mod tests {
     use super::*;
 
-    /// Создаёт каталог скилла во временной директории.
+    /// Creates a skill directory inside a temporary directory.
     fn write_skill(root: &Path, name: &str, contract: &str, doc: &str) {
         let dir = root.join(name);
         std::fs::create_dir_all(&dir).unwrap();
@@ -205,7 +205,7 @@ mod tests {
     }
 
     fn doc_for(name: &str) -> String {
-        format!("---\nname: {name}\ndescription: Описание {name}\n---\n\nтело\n")
+        format!("---\nname: {name}\ndescription: Description of {name}\n---\n\nbody\n")
     }
 
     #[test]
@@ -238,7 +238,7 @@ mod tests {
             &doc_for("review"),
         );
         std::fs::create_dir_all(tmp.path().join(".git")).unwrap();
-        std::fs::write(tmp.path().join("README.md"), "не скилл").unwrap();
+        std::fs::write(tmp.path().join("README.md"), "not a skill").unwrap();
         let registry = Registry::load(tmp.path()).unwrap();
         assert_eq!(registry.names(), vec!["review"]);
     }
@@ -260,7 +260,7 @@ mod tests {
             tmp.path(),
             "b",
             "mode = \"review\"\ntools = [\"read\", \"write\"]",
-            "без frontmatter",
+            "no frontmatter here",
         );
         write_skill(
             tmp.path(),
@@ -284,7 +284,7 @@ mod tests {
     #[test]
     fn missing_directory_is_reported() {
         let err = Registry::load(Path::new("/definitely/not/here")).unwrap_err();
-        assert!(err.to_string().contains("не читается"), "{err}");
+        assert!(err.to_string().contains("cannot be read"), "{err}");
     }
 
     #[test]
@@ -299,13 +299,13 @@ mod tests {
         let registry = Registry::load(tmp.path()).unwrap();
         let help = registry.help_text();
         assert!(help.contains("`/llm translate <lang>` (patch)"), "{help}");
-        assert!(help.contains("Описание translate"), "{help}");
+        assert!(help.contains("Description of translate"), "{help}");
     }
 
     #[test]
     fn help_text_for_empty_registry() {
         let tmp = tempfile::tempdir().unwrap();
         let registry = Registry::load(tmp.path()).unwrap();
-        assert!(registry.help_text().contains("скиллов пока нет"));
+        assert!(registry.help_text().contains("no skills are installed yet"));
     }
 }

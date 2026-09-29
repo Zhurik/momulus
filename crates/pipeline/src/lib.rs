@@ -1,4 +1,4 @@
-//! Оркестрация одной джобы: рабочая копия → скилл → runner → валидация → публикация.
+//! Orchestration of one job: working copy → skill → runner → validation → publication.
 
 pub mod fake;
 pub mod job;

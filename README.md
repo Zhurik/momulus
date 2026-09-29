@@ -46,9 +46,9 @@ diminutive suffix felt right for a bot that argues about a missing comma.)
 - Status is visible as reactions on the command comment: 👀 picked up,
   ✅ done, ❌ failed (plus a comment with a short reason and the job id).
 
-Three skills ship with the project: `proofread` (proofreading Russian-language
-MDX blog posts), `review` (code review), and `translate` (article translation,
-patch mode).
+Three skills ship with the project: `proofread` (proofreading Markdown/MDX blog
+posts in any language), `review` (code review), and `translate` (post
+translation, patch mode).
 
 ## Requirements
 
@@ -66,12 +66,11 @@ just build-images
 just skills-validate
 
 # 3. Run a skill locally, without GitHub — handy for iterating on prompts
-export LLM_API_KEY=...            # provider key
-export LLM_BASE_URL=https://foundation-models.api.cloud.ru/v1
+export LLM_API_KEY=...            # provider key, e.g. an OpenAI one
 cargo run -p momulus -- run \
     --repo-path ~/Projects/blog \
     --skill proofread \
-    --files content/posts/dns/index.ru.md \
+    --files content/posts/dns/index.md \
     --out ./out
 ```
 
@@ -114,9 +113,9 @@ skills_dir = "/srv/momulus/skills"
 shutdown_timeout = "5m"
 
 [llm]
-default_provider = "cloudru"
-default_model = "zai-org/GLM-5.1"
-api = "openai-completions"     # only for providers pi does not know about
+default_provider = "openai"    # built into pi, so no base URL is needed
+default_model = "gpt-5.1"
+# api = "openai-completions"   # only for providers pi does not know about
 
 [docker]
 runner_image = "momulus-runner:latest"
@@ -137,20 +136,37 @@ Secrets come from the environment only:
 | `GITHUB_APP_ID` | GitHub App id |
 | `GITHUB_APP_PRIVATE_KEY_PATH` | path to the App's `.pem` key |
 | `LLM_API_KEY` | LLM provider key |
-| `LLM_BASE_URL` | provider API base (for Cloud.ru: `https://foundation-models.api.cloud.ru/v1`) |
+| `LLM_BASE_URL` | provider API base — only for an OpenAI-compatible gateway (e.g. `https://openrouter.ai/api/v1`) |
 
 ### Providers pi does not know
 
-pi ships with built-in providers (`anthropic`, `openai`, `google`, …). For those,
-`default_provider`/`default_model` are enough and `api` should be removed from
-the config.
+pi ships with built-in providers (`openai`, `anthropic`, `google`, …). For those,
+`default_provider`/`default_model` are enough and `api` stays commented out.
 
-For an OpenAI-compatible gateway (such as Cloud.ru Foundation Models) set
-`api = "openai-completions"`. Momulus then generates a `models.json` inside the
-container with `baseUrl`, `api` and the model list. The key itself never reaches
-that file: it is written as `$CLOUDRU_API_KEY`, and pi reads the value from the
-container environment. The variable name is derived from the provider name
-(`cloudru` → `CLOUDRU_API_KEY`) or set explicitly via `llm.api_key_env`.
+For an OpenAI-compatible gateway — OpenRouter, a self-hosted vLLM, a corporate
+proxy, any regional model service — set `api` and point `LLM_BASE_URL` at the
+endpoint:
+
+```toml
+[llm]
+default_provider = "openrouter"
+default_model = "<model id as the gateway names it>"
+api = "openai-completions"
+```
+
+```bash
+export LLM_BASE_URL=https://openrouter.ai/api/v1
+export LLM_API_KEY=...
+```
+
+Momulus then generates a `models.json` inside the container with `baseUrl`, `api`
+and the model list. The key itself never reaches that file: it is written as
+`$OPENROUTER_API_KEY`, and pi reads the value from the container environment. The
+variable name is derived from the provider name (`openrouter` →
+`OPENROUTER_API_KEY`) or set explicitly via `llm.api_key_env`.
+
+Validation is eager: if `api` is set but `LLM_BASE_URL` is not, the service
+refuses to start and says exactly that.
 
 ## Deploying with docker-compose
 
@@ -165,7 +181,7 @@ cat > .env <<'ENV'
 MOMULUS_ROOT=/srv/momulus
 GITHUB_APP_ID=123456
 LLM_API_KEY=...
-LLM_BASE_URL=https://foundation-models.api.cloud.ru/v1
+# LLM_BASE_URL=https://openrouter.ai/api/v1   # only for a custom gateway
 ENV
 
 docker compose --profile build build   # the pi runner image
@@ -368,5 +384,7 @@ Tests never touch the network: GitHub is replaced by `wiremock`, the LLM by
 need Docker and a real pi are marked `#[ignore]` and run separately; without
 `LLM_API_KEY` they report that and pass.
 
-The code, comments and the messages the bot posts to pull requests are in
-Russian — only this README is in English.
+Code, comments, log messages and everything the bot posts to a pull request are
+in English. Findings themselves follow the language of the file under review:
+the prompt tells the model to write each note in the language of the text it is
+reviewing, so a Russian or German post gets reviewed in its own language.

@@ -1,7 +1,7 @@
-//! Ядро momulus: типы, трейты и конфигурация.
+//! Momulus core: types, traits and configuration.
 //!
-//! Крейт не знает ни про GitHub, ни про Docker — платформенные детали живут
-//! за трейтами [`Trigger`], [`Publisher`] и [`Runner`].
+//! The crate knows nothing about GitHub or Docker — platform details live behind
+//! the [`Trigger`], [`Publisher`] and [`Runner`] traits.
 
 pub mod command;
 pub mod config;

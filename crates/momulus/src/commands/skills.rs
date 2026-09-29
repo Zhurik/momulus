@@ -8,26 +8,26 @@ use momulus_skills::Registry;
 
 use crate::cli::{Cli, SkillsCommand};
 
-/// Где искать скиллы: флаг, потом конфиг (если он есть), потом дефолт.
+/// Where to look for skills: the flag, then the config (if any), then the default.
 pub fn resolve_skills_dir(cli: &Cli) -> Result<PathBuf> {
     if let Some(dir) = &cli.skills_dir {
         return Ok(dir.clone());
     }
     if cli.config.exists() {
         let config = Config::load(&cli.config)
-            .with_context(|| format!("конфиг {}", cli.config.display()))?;
+            .with_context(|| format!("config {}", cli.config.display()))?;
         return Ok(config.skills_dir);
     }
     Ok(PathBuf::from("skills"))
 }
 
-/// Конфиг из файла, а если файла нет — разумные умолчания для локального прогона.
+/// The config from a file, or sensible defaults for a local run when there is none.
 pub fn load_config_or_default(cli: &Cli) -> Result<Config> {
     if cli.config.exists() {
         return Config::load(&cli.config)
-            .with_context(|| format!("конфиг {}", cli.config.display()));
+            .with_context(|| format!("config {}", cli.config.display()));
     }
-    Ok(Config::from_toml("allowed_users = [\"local\"]").expect("умолчания валидны"))
+    Ok(Config::from_toml("allowed_users = [\"local\"]").expect("the defaults are valid"))
 }
 
 pub fn run(cli: &Cli, command: &SkillsCommand) -> Result<()> {
@@ -41,7 +41,7 @@ pub fn run(cli: &Cli, command: &SkillsCommand) -> Result<()> {
 fn list(dir: &Path) -> Result<()> {
     let registry = Registry::load(dir).map_err(anyhow::Error::from)?;
     if registry.is_empty() {
-        println!("в {} нет скиллов", dir.display());
+        println!("no skills in {}", dir.display());
         return Ok(());
     }
 
@@ -105,11 +105,11 @@ fn validate(dir: &Path) -> Result<()> {
     }
     if !report.errors.is_empty() {
         bail!(
-            "невалидных скиллов: {} (из {})",
+            "invalid skills: {} of {}",
             report.errors.len(),
             report.errors.len() + report.registry.len()
         );
     }
-    println!("\nвсе контракты валидны: {}", report.registry.len());
+    println!("\nall contracts are valid: {}", report.registry.len());
     Ok(())
 }

@@ -1,7 +1,7 @@
-//! Publisher, который ничего не публикует: печатает в stdout.
+//! A Publisher that publishes nothing: it prints to stdout.
 //!
-//! Используется флагом `--dry-run`: джоба выполняется целиком, включая вызов
-//! модели, но в PR ничего не уходит.
+//! Used by the `--dry-run` flag: the job runs end to end, model call included,
+//! but nothing reaches the PR.
 
 use async_trait::async_trait;
 use momulus_core::{AckState, Finding, JobRef, Patch, PrRef, Publisher, Result};
@@ -20,9 +20,9 @@ impl StdoutPublisher {
 impl Publisher for StdoutPublisher {
     async fn ack(&self, job: &JobRef, state: AckState) -> Result<()> {
         let mark = match state {
-            AckState::Received => "взято в работу 👀",
-            AckState::Succeeded => "успех ✅",
-            AckState::Failed => "провал ❌",
+            AckState::Received => "picked up 👀",
+            AckState::Succeeded => "success ✅",
+            AckState::Failed => "failure ❌",
         };
         println!(
             "[dry-run] {} PR #{} comment {} → {mark}",
@@ -35,7 +35,7 @@ impl Publisher for StdoutPublisher {
 
     async fn post_review(&self, pr: &PrRef, findings: &[Finding], summary: &str) -> Result<()> {
         println!(
-            "\n[dry-run] ревью в {}#{} ({} inline-комментариев)\n--- summary ---\n{summary}",
+            "\n[dry-run] review on {}#{} ({} inline comments)\n--- summary ---\n{summary}",
             pr.full_name(),
             pr.number,
             findings.len()
@@ -57,7 +57,7 @@ impl Publisher for StdoutPublisher {
 
     async fn push_and_open_pr(&self, pr: &PrRef, patch: &Patch) -> Result<Url> {
         println!(
-            "\n[dry-run] ветка {} в {} ({} файлов), PR с base {}\n--- заголовок ---\n{}\n--- тело ---\n{}",
+            "\n[dry-run] branch {} in {} ({} files), PR with base {}\n--- title ---\n{}\n--- body ---\n{}",
             patch.branch,
             pr.full_name(),
             patch.files.len(),
@@ -66,18 +66,18 @@ impl Publisher for StdoutPublisher {
             patch.body
         );
         for file in &patch.files {
-            println!("  изменён: {file}");
+            println!("  changed: {file}");
         }
         println!(
-            "  (рабочая копия оставлена как есть: {})",
+            "  (the working copy was left as is: {})",
             patch.worktree.display()
         );
-        Ok(Url::parse("https://example.invalid/dry-run/pull/0").expect("валидный URL"))
+        Ok(Url::parse("https://example.invalid/dry-run/pull/0").expect("a valid URL"))
     }
 
     async fn comment(&self, pr: &PrRef, body: &str) -> Result<()> {
         println!(
-            "\n[dry-run] комментарий в {}#{}:\n{body}",
+            "\n[dry-run] comment on {}#{}:\n{body}",
             pr.full_name(),
             pr.number
         );
@@ -130,11 +130,11 @@ mod tests {
                     body: "b".into(),
                     suggestion: Some("c".into()),
                 }],
-                "итог",
+                "wrap-up",
             )
             .await
             .unwrap();
-        publisher.comment(&pr(), "текст").await.unwrap();
+        publisher.comment(&pr(), "some text").await.unwrap();
 
         let url = publisher
             .push_and_open_pr(

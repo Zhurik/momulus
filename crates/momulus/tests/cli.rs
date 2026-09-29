@@ -22,7 +22,7 @@ fn unknown_subcommand_fails() {
         .failure();
 }
 
-/// Каталог с одним валидным и одним битым скиллом.
+/// A directory with one valid and one broken skill.
 fn fixture_skills(dir: &std::path::Path, broken: bool) {
     std::fs::create_dir_all(dir).unwrap();
     let ok = dir.join("proofread");
@@ -34,18 +34,18 @@ fn fixture_skills(dir: &std::path::Path, broken: bool) {
     .unwrap();
     std::fs::write(
         ok.join("SKILL.md"),
-        "---\nname: proofread\ndescription: Вычитка статей\n---\n\nтело\n",
+        "---\nname: proofread\ndescription: Proofreading posts\n---\n\nbody\n",
     )
     .unwrap();
 
     if broken {
         let bad = dir.join("translate");
         std::fs::create_dir_all(&bad).unwrap();
-        // patch без tools — контракт невалиден
+        // patch without tools — an invalid contract
         std::fs::write(bad.join("skill.toml"), "mode = \"patch\"\n").unwrap();
         std::fs::write(
             bad.join("SKILL.md"),
-            "---\nname: translate\ndescription: Перевод\n---\n",
+            "---\nname: translate\ndescription: Translation\n---\n",
         )
         .unwrap();
     }
@@ -67,7 +67,7 @@ fn skills_list_prints_registry() {
         .success()
         .stdout(contains("proofread"))
         .stdout(contains("review"))
-        .stdout(contains("Вычитка статей"));
+        .stdout(contains("Proofreading posts"));
 }
 
 #[test]
@@ -84,7 +84,7 @@ fn skills_validate_passes_on_good_contracts() {
         ])
         .assert()
         .success()
-        .stdout(contains("все контракты валидны: 1"));
+        .stdout(contains("all contracts are valid: 1"));
 }
 
 #[test]
@@ -112,7 +112,7 @@ fn skills_validate_reports_missing_directory() {
         .args(["--skills-dir", "/definitely/not/here", "skills", "validate"])
         .assert()
         .failure()
-        .stderr(contains("не читается"));
+        .stderr(contains("cannot be read"));
 }
 
 #[test]
@@ -128,11 +128,11 @@ fn bundled_skills_are_valid() {
         .stdout(contains("review"));
 }
 
-/// Мини-репозиторий со статьёй и каталог заготовленных артефактов.
+/// A tiny repository with a post, plus a directory of prepared artifacts.
 fn fixture_repo(dir: &std::path::Path) {
     std::fs::create_dir_all(dir.join("posts")).unwrap();
-    std::fs::write(dir.join("posts/hello.mdx"), "# Привет\n\nтекст с ашибкой\n").unwrap();
-    std::fs::write(dir.join("Cargo.toml"), "не под фильтром\n").unwrap();
+    std::fs::write(dir.join("posts/hello.mdx"), "# Hello\n\ntext with a tpyo\n").unwrap();
+    std::fs::write(dir.join("Cargo.toml"), "outside the filter\n").unwrap();
 }
 
 #[test]
@@ -147,7 +147,7 @@ fn run_with_fake_runner_prints_findings() {
     std::fs::create_dir_all(&prepared).unwrap();
     std::fs::write(
         prepared.join("findings.json"),
-        r#"{"summary":"одна опечатка","findings":[{"path":"posts/hello.mdx","line":3,"severity":"typo","body":"ашибкой -> ошибкой"}]}"#,
+        r#"{"summary":"one typo","findings":[{"path":"posts/hello.mdx","line":3,"severity":"typo","body":"tpyo -> typo"}]}"#,
     )
     .unwrap();
 
@@ -169,12 +169,12 @@ fn run_with_fake_runner_prints_findings() {
         ])
         .assert()
         .success()
-        .stdout(contains("скилл proofread (review)"))
-        .stdout(contains("файлов: 1"))
-        .stdout(contains("ашибкой -> ошибкой"));
+        .stdout(contains("skill proofread (review)"))
+        .stdout(contains("files: 1"))
+        .stdout(contains("tpyo -> typo"));
 
     assert!(out.join("findings.json").exists());
-    assert!(out.join("pi.log").exists(), "лог pi сохранён");
+    assert!(out.join("pi.log").exists(), "the pi log was stored");
 }
 
 #[test]
@@ -201,7 +201,7 @@ fn run_reports_when_nothing_matches_the_filter() {
         ])
         .assert()
         .success()
-        .stdout(contains("нечего делать"));
+        .stdout(contains("nothing to do"));
 }
 
 #[test]
@@ -221,13 +221,13 @@ fn run_rejects_unknown_skill() {
             "--repo-path",
             repo.to_str().unwrap(),
             "--skill",
-            "нет-такого",
+            "no-such-skill",
             "--fake-runner",
             tmp.path().to_str().unwrap(),
         ])
         .assert()
         .failure()
-        .stderr(contains("неизвестный скилл"));
+        .stderr(contains("unknown skill"));
 }
 
 #[test]
@@ -267,7 +267,7 @@ fn serve_reports_missing_config() {
         .args(["--config", "/definitely/not/here.toml", "serve"])
         .assert()
         .failure()
-        .stderr(contains("конфиг"));
+        .stderr(contains("config"));
 }
 
 #[test]
@@ -294,11 +294,11 @@ fn serve_reports_missing_github_secrets() {
             skills.to_str().unwrap(),
             "serve",
         ])
-        // Переменные секретов заведомо пусты.
+        // The secret variables are deliberately empty.
         .env_remove("GITHUB_APP_ID")
         .env_remove("GITHUB_APP_PRIVATE_KEY_PATH")
         .env("LLM_API_KEY", "test-key")
-        .env("LLM_BASE_URL", "https://foundation-models.api.cloud.ru/v1")
+        .env("LLM_BASE_URL", "https://openrouter.ai/api/v1")
         .assert()
         .failure()
         .stderr(contains("GITHUB_APP_ID"));
@@ -306,6 +306,37 @@ fn serve_reports_missing_github_secrets() {
 
 #[test]
 fn serve_requires_base_url_for_custom_provider() {
+    let tmp = tempfile::tempdir().unwrap();
+    let skills = tmp.path().join("skills");
+    fixture_skills(&skills, false);
+    let config = tmp.path().join("config.toml");
+    // A provider pi does not know needs an endpoint to talk to.
+    std::fs::write(
+        &config,
+        format!(
+            "allowed_users = [\"zhurik\"]\ndata_dir = {:?}\n\n             [llm]\ndefault_provider = \"my-gateway\"\napi = \"openai-completions\"\n",
+            tmp.path().join("data").to_string_lossy()
+        ),
+    )
+    .unwrap();
+
+    Command::cargo_bin("momulus")
+        .unwrap()
+        .args([
+            "--config",
+            config.to_str().unwrap(),
+            "--skills-dir",
+            skills.to_str().unwrap(),
+            "serve",
+        ])
+        .env_remove("LLM_BASE_URL")
+        .assert()
+        .failure()
+        .stderr(contains("LLM_BASE_URL"));
+}
+
+#[test]
+fn serve_accepts_a_builtin_provider_without_base_url() {
     let tmp = tempfile::tempdir().unwrap();
     let skills = tmp.path().join("skills");
     fixture_skills(&skills, false);
@@ -319,11 +350,21 @@ fn serve_requires_base_url_for_custom_provider() {
     )
     .unwrap();
 
+    // The default provider is built into pi, so the run gets as far as the
+    // missing GitHub credentials rather than complaining about the endpoint.
     Command::cargo_bin("momulus")
         .unwrap()
-        .args(["--config", config.to_str().unwrap(), "serve"])
+        .args([
+            "--config",
+            config.to_str().unwrap(),
+            "--skills-dir",
+            skills.to_str().unwrap(),
+            "serve",
+        ])
         .env_remove("LLM_BASE_URL")
+        .env_remove("GITHUB_APP_ID")
+        .env("LLM_API_KEY", "test-key")
         .assert()
         .failure()
-        .stderr(contains("LLM_BASE_URL"));
+        .stderr(contains("GITHUB_APP_ID"));
 }

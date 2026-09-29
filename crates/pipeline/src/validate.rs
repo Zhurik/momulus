@@ -1,4 +1,4 @@
-//! Проверка того, что вернула модель, и приведение находок к публикуемому виду.
+//! Validating what the model returned and shaping the findings for publication.
 
 use std::collections::BTreeSet;
 
@@ -7,23 +7,23 @@ use momulus_workspace::DiffIndex;
 
 use crate::prompt::WORK_DIR;
 
-/// Разобранные и разложенные по полочкам находки.
+/// Findings, parsed and sorted into their proper buckets.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ReviewResult {
-    /// Резюме, как его написала модель.
+    /// The summary exactly as the model wrote it.
     pub summary: String,
-    /// Находки, которые можно повесить на строки diff'а.
+    /// Findings that can be anchored to lines of the diff.
     pub inline: Vec<Finding>,
-    /// Находки на строках вне diff — уходят в текст резюме.
+    /// Findings on lines outside the diff — they go into the summary text.
     pub out_of_diff: Vec<Finding>,
-    /// Находки про файлы, которых скилл не касался.
+    /// Findings about files the skill never touched.
     pub unknown_path: Vec<Finding>,
-    /// Сколько находок отброшено из-за max_comments.
+    /// How many findings were dropped because of max_comments.
     pub truncated: usize,
 }
 
 impl ReviewResult {
-    /// Всего находок после разбора (без отброшенных лимитом).
+    /// Total findings after parsing (excluding the ones dropped by the limit).
     pub fn kept(&self) -> usize {
         self.inline.len() + self.out_of_diff.len() + self.unknown_path.len()
     }
@@ -33,14 +33,16 @@ impl ReviewResult {
     }
 }
 
-/// Строго разбирает `findings.json`.
+/// Strictly parses `findings.json`.
 ///
-/// Единственная вольность — снимаем markdown-обёртку ```json, если модель
-/// всё-таки её добавила: это дешевле, чем тратить повторный вызов.
+/// The one liberty we take is stripping a ```json markdown fence if the model
+/// added one anyway: cheaper than spending another model call.
 pub fn parse_review(raw: &str) -> Result<ReviewOutput> {
     let text = raw.trim();
     if text.is_empty() {
-        return Err(Error::InvalidOutput("файл findings.json пустой".into()));
+        return Err(Error::InvalidOutput(
+            "the findings.json file is empty".into(),
+        ));
     }
 
     let first = serde_json::from_str::<ReviewOutput>(text);
@@ -58,11 +60,11 @@ pub fn parse_review(raw: &str) -> Result<ReviewOutput> {
     Err(Error::InvalidOutput(err.to_string()))
 }
 
-/// Возвращает содержимое первого ```-блока.
+/// Returns the contents of the first ``` block.
 fn strip_code_fence(text: &str) -> Option<&str> {
     let start = text.find("```")?;
     let after = &text[start + 3..];
-    // Пропускаем возможный ярлык языка в первой строке.
+    // Skip a possible language tag on the first line.
     let after = match after.find('\n') {
         Some(nl) if after[..nl].trim().chars().all(char::is_alphanumeric) => &after[nl + 1..],
         _ => after,
@@ -71,9 +73,9 @@ fn strip_code_fence(text: &str) -> Option<&str> {
     Some(after[..end].trim())
 }
 
-/// Раскладывает находки: что публикуем построчно, что уходит в резюме.
+/// Sorts findings: what gets an inline comment and what goes into the summary.
 ///
-/// `diff` — diff PR; для локального прогона его нет, тогда строки не проверяем.
+/// `diff` is the PR diff; a local run has none, and then lines are not checked.
 pub fn prepare_review(
     output: ReviewOutput,
     files: &[String],
@@ -90,7 +92,7 @@ pub fn prepare_review(
             finding
         })
         .collect();
-    // Детерминированный порядок: так же выглядит ревью в PR и снапшоты в тестах.
+    // Deterministic order: the review in the PR and the test snapshots match.
     findings.sort_by(|a, b| a.path.cmp(&b.path).then(a.line.cmp(&b.line)));
 
     let mut result = ReviewResult {
@@ -122,14 +124,14 @@ pub fn prepare_review(
     result
 }
 
-/// Приводит путь от модели к пути относительно корня репозитория.
+/// Normalises a path from the model into a repository-relative one.
 fn normalize_path(path: &str) -> String {
     let mut path = path.trim();
     for prefix in [
         concat!("/work", "/"),
         "work/",
         "./",
-        // Иногда модель пишет путь с ведущим слешем от корня репозитория.
+        // Sometimes the model writes a leading slash relative to the repo root.
         "/",
     ] {
         if let Some(stripped) = path.strip_prefix(prefix) {
@@ -160,32 +162,32 @@ diff --git a/posts/a.mdx b/posts/a.mdx
 --- a/posts/a.mdx
 +++ b/posts/a.mdx
 @@ -1,3 +1,4 @@
- первая
--вторая
-+ВТОРАЯ
-+третья
- четвёртая
+ first
+-second
++SECOND
++third
+ fourth
 ";
 
     #[test]
     fn parses_valid_json() {
         let out = parse_review(
-            r#"{"summary":"итог","findings":[{"path":"a.mdx","line":2,"severity":"typo","body":"опечатка"}]}"#,
+            r#"{"summary":"wrap-up","findings":[{"path":"a.mdx","line":2,"severity":"typo","body":"typo"}]}"#,
         )
         .unwrap();
-        assert_eq!(out.summary, "итог");
+        assert_eq!(out.summary, "wrap-up");
         assert_eq!(out.findings.len(), 1);
     }
 
     #[test]
     fn rejects_unknown_severity() {
         let err = parse_review(
-            r#"{"summary":"s","findings":[{"path":"a.mdx","line":1,"severity":"нытьё","body":"b"}]}"#,
+            r#"{"summary":"s","findings":[{"path":"a.mdx","line":1,"severity":"whining","body":"b"}]}"#,
         )
         .unwrap_err();
         assert!(matches!(err, Error::InvalidOutput(_)), "{err:?}");
         assert!(err.to_string().contains("unknown variant"), "{err}");
-        // В сообщении для модели перечислены допустимые значения.
+        // The message shown to the model lists the accepted values.
         assert!(err.to_string().contains("punctuation"), "{err}");
     }
 
@@ -204,12 +206,12 @@ diff --git a/posts/a.mdx b/posts/a.mdx
     #[test]
     fn rejects_empty_file() {
         let err = parse_review("   \n").unwrap_err();
-        assert!(err.to_string().contains("пустой"), "{err}");
+        assert!(err.to_string().contains("empty"), "{err}");
     }
 
     #[test]
     fn rejects_plain_text() {
-        let err = parse_review("я не смог, извини").unwrap_err();
+        let err = parse_review("sorry, I could not do it").unwrap_err();
         assert!(matches!(err, Error::InvalidOutput(_)));
     }
 
@@ -217,8 +219,9 @@ diff --git a/posts/a.mdx b/posts/a.mdx
     fn tolerates_markdown_code_fence() {
         let out = parse_review("```json\n{\"summary\":\"s\",\"findings\":[]}\n```").unwrap();
         assert_eq!(out.summary, "s");
-        let out = parse_review("вот результат:\n```\n{\"summary\":\"s2\",\"findings\":[]}\n```\n")
-            .unwrap();
+        let out =
+            parse_review("here is the result:\n```\n{\"summary\":\"s2\",\"findings\":[]}\n```\n")
+                .unwrap();
         assert_eq!(out.summary, "s2");
     }
 
@@ -241,10 +244,10 @@ diff --git a/posts/a.mdx b/posts/a.mdx
     fn keeps_findings_inside_the_diff() {
         let diff = DiffIndex::parse(DIFF).unwrap();
         let output = ReviewOutput {
-            summary: "итог".into(),
+            summary: "wrap-up".into(),
             findings: vec![
-                finding("/work/posts/a.mdx", 2, "в diff"),
-                finding("posts/a.mdx", 3, "тоже в diff"),
+                finding("/work/posts/a.mdx", 2, "inside the diff"),
+                finding("posts/a.mdx", 3, "also inside the diff"),
             ],
         };
         let result = prepare_review(output, &["posts/a.mdx".into()], Some(&diff), 30);
@@ -257,27 +260,27 @@ diff --git a/posts/a.mdx b/posts/a.mdx
     fn moves_findings_outside_the_diff_to_summary() {
         let diff = DiffIndex::parse(DIFF).unwrap();
         let output = ReviewOutput {
-            summary: "итог".into(),
+            summary: "wrap-up".into(),
             findings: vec![
-                finding("posts/a.mdx", 2, "в diff"),
-                finding("posts/a.mdx", 99, "вне hunk"),
-                finding("posts/a.mdx", 0, "без строки"),
+                finding("posts/a.mdx", 2, "inside the diff"),
+                finding("posts/a.mdx", 99, "outside the hunk"),
+                finding("posts/a.mdx", 0, "no line at all"),
             ],
         };
         let result = prepare_review(output, &["posts/a.mdx".into()], Some(&diff), 30);
         assert_eq!(result.inline.len(), 1);
         assert_eq!(result.out_of_diff.len(), 2);
-        assert_eq!(result.kept(), 3, "ничего не потеряли");
+        assert_eq!(result.kept(), 3, "nothing was lost");
     }
 
     #[test]
     fn moves_findings_about_other_files_to_summary() {
         let diff = DiffIndex::parse(DIFF).unwrap();
         let output = ReviewOutput {
-            summary: "итог".into(),
+            summary: "wrap-up".into(),
             findings: vec![
-                finding("posts/a.mdx", 2, "наш файл"),
-                finding("src/main.rs", 10, "чужой файл"),
+                finding("posts/a.mdx", 2, "our file"),
+                finding("src/main.rs", 10, "somebody else's file"),
             ],
         };
         let result = prepare_review(output, &["posts/a.mdx".into()], Some(&diff), 30);
@@ -290,9 +293,9 @@ diff --git a/posts/a.mdx b/posts/a.mdx
     fn truncates_to_max_comments() {
         let diff = DiffIndex::parse(DIFF).unwrap();
         let output = ReviewOutput {
-            summary: "итог".into(),
+            summary: "wrap-up".into(),
             findings: (2..=4)
-                .map(|line| finding("posts/a.mdx", line, "замечание"))
+                .map(|line| finding("posts/a.mdx", line, "a finding"))
                 .collect(),
         };
         let result = prepare_review(output, &["posts/a.mdx".into()], Some(&diff), 2);
@@ -303,8 +306,8 @@ diff --git a/posts/a.mdx b/posts/a.mdx
     #[test]
     fn without_diff_all_lines_are_commentable() {
         let output = ReviewOutput {
-            summary: "итог".into(),
-            findings: vec![finding("posts/a.mdx", 1234, "локальный прогон")],
+            summary: "wrap-up".into(),
+            findings: vec![finding("posts/a.mdx", 1234, "local run")],
         };
         let result = prepare_review(output, &["posts/a.mdx".into()], None, 30);
         assert_eq!(result.inline.len(), 1);
@@ -313,8 +316,8 @@ diff --git a/posts/a.mdx b/posts/a.mdx
     #[test]
     fn empty_file_list_allows_any_path() {
         let output = ReviewOutput {
-            summary: "итог".into(),
-            findings: vec![finding("что/угодно.md", 1, "b")],
+            summary: "wrap-up".into(),
+            findings: vec![finding("any/path.md", 1, "b")],
         };
         let result = prepare_review(output, &[], None, 30);
         assert_eq!(result.inline.len(), 1);
@@ -323,11 +326,11 @@ diff --git a/posts/a.mdx b/posts/a.mdx
     #[test]
     fn findings_are_sorted_by_path_and_line() {
         let output = ReviewOutput {
-            summary: "итог".into(),
+            summary: "wrap-up".into(),
             findings: vec![
-                finding("b.mdx", 5, "раз"),
-                finding("a.mdx", 10, "два"),
-                finding("a.mdx", 2, "три"),
+                finding("b.mdx", 5, "one"),
+                finding("a.mdx", 10, "two"),
+                finding("a.mdx", 2, "three"),
             ],
         };
         let result = prepare_review(output, &[], None, 30);
@@ -342,11 +345,11 @@ diff --git a/posts/a.mdx b/posts/a.mdx
     #[test]
     fn empty_review_is_detected() {
         let output = ReviewOutput {
-            summary: "всё чисто".into(),
+            summary: "all clean".into(),
             findings: Vec::new(),
         };
         let result = prepare_review(output, &[], None, 30);
         assert!(result.is_empty());
-        assert_eq!(result.summary, "всё чисто");
+        assert_eq!(result.summary, "all clean");
     }
 }

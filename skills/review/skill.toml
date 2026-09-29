@@ -1,5 +1,5 @@
 mode = "review"
-# write — только для /out/findings.json: /work монтируется read-only.
+# write is only for /out/findings.json: /work is mounted read-only.
 tools = ["read", "grep", "find", "ls", "write"]
 files = []
 args = []

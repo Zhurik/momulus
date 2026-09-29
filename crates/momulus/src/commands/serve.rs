@@ -1,4 +1,4 @@
-//! `momulus serve` — основной режим: опрос платформы и выполнение джоб.
+//! `momulus serve` — the main mode: poll the platform and run jobs.
 
 use std::sync::Arc;
 
@@ -18,18 +18,18 @@ use tokio_util::sync::CancellationToken;
 use crate::cli::Cli;
 use crate::commands::skills::resolve_skills_dir;
 
-/// Сколько джоб может ждать в канале между триггером и очередью.
+/// How many jobs may wait in the channel between trigger and queue.
 const CHANNEL_CAPACITY: usize = 64;
 
 pub async fn run(cli: &Cli, dry_run: bool) -> Result<()> {
     let config =
-        Config::load(&cli.config).with_context(|| format!("конфиг {}", cli.config.display()))?;
+        Config::load(&cli.config).with_context(|| format!("config {}", cli.config.display()))?;
     let secrets = Secrets::from_env()?;
     config.llm.check_ready(secrets.llm_base_url.as_deref())?;
 
     let skills_dir = resolve_skills_dir(cli)?.canonicalize().with_context(|| {
         format!(
-            "каталог скиллов {}",
+            "skills directory {}",
             resolve_skills_dir(cli).unwrap().display()
         )
     })?;
@@ -37,7 +37,7 @@ pub async fn run(cli: &Cli, dry_run: bool) -> Result<()> {
     tracing::info!(
         skills = ?registry.names().await,
         dry_run,
-        "реестр скиллов загружен"
+        "the skill registry is loaded"
     );
 
     std::fs::create_dir_all(&config.data_dir)?;
@@ -47,7 +47,7 @@ pub async fn run(cli: &Cli, dry_run: bool) -> Result<()> {
     let git = Git::new(redactor.clone());
     let cache = RepoCache::new(config.repos_dir(), git.clone());
 
-    // Аутентификация приложения: из неё растут и клиенты API, и токены для git.
+    // App authentication: both API clients and git tokens grow out of it.
     let (app_id, key_path) = secrets.require_github()?;
     let auth = AppAuth::from_key_path(app_id, &key_path, &config.github.api_base)?;
     let app = GithubApp::new(auth.clone());
@@ -59,12 +59,12 @@ pub async fn run(cli: &Cli, dry_run: bool) -> Result<()> {
     )?);
     runner_check(runner.as_ref(), &config).await;
 
-    // Токен для git-операций всегда берётся у приложения, даже в dry-run:
-    // fetch рабочей копии нужен и там.
+    // The git token always comes from the App, even in dry-run mode: fetching
+    // the working copy is needed there too.
     let access: Arc<dyn GitAccess> = app.clone();
 
     let publisher: Arc<dyn Publisher> = if dry_run {
-        tracing::warn!("режим --dry-run: результаты не публикуются");
+        tracing::warn!("--dry-run mode: nothing will be published");
         Arc::new(StdoutPublisher::new())
     } else {
         Arc::new(GithubPublisher::new(
@@ -122,7 +122,7 @@ pub async fn run(cli: &Cli, dry_run: bool) -> Result<()> {
         },
     );
 
-    // Общий сигнал остановки для триггера и воркера.
+    // A shared shutdown signal for the trigger and the worker.
     let shutdown = CancellationToken::new();
     let (tx, rx) = mpsc::channel::<Job>(CHANNEL_CAPACITY);
 
@@ -139,40 +139,40 @@ pub async fn run(cli: &Cli, dry_run: bool) -> Result<()> {
     tracing::info!(
         poll_interval_s = config.poll_interval.as_secs(),
         concurrency = config.concurrency,
-        "сервис запущен"
+        "the service is running"
     );
 
-    // Ошибка любой из задач тоже останавливает сервис.
-    let trigger_result = trigger_task.await.context("задача триггера")?;
+    // A failure in either task stops the service as well.
+    let trigger_result = trigger_task.await.context("the trigger task")?;
     shutdown.cancel();
-    let worker_result = worker_task.await.context("задача воркера")?;
+    let worker_result = worker_task.await.context("the worker task")?;
     signals.abort();
 
     trigger_result?;
     worker_result?;
-    tracing::info!("сервис остановлен");
+    tracing::info!("the service has stopped");
     Ok(())
 }
 
-/// Проверяет, что образ раннера на месте: лучше узнать это при старте.
+/// Reports the runner configuration at startup.
 async fn runner_check(runner: &dyn Runner, config: &Config) {
     let _ = runner;
-    tracing::debug!(image = %config.docker.runner_image, "раннер настроен");
+    tracing::debug!(image = %config.docker.runner_image, "the runner is configured");
 }
 
-/// SIGTERM/SIGINT — остановка, SIGHUP — перечитать скиллы.
+/// SIGTERM/SIGINT shut the service down, SIGHUP reloads the skills.
 async fn watch_signals(shutdown: CancellationToken, registry: Arc<SharedRegistry>) {
     let mut term = match signal(SignalKind::terminate()) {
         Ok(signal) => signal,
         Err(err) => {
-            tracing::error!(error = %err, "не удалось подписаться на SIGTERM");
+            tracing::error!(error = %err, "could not subscribe to SIGTERM");
             return;
         }
     };
     let mut hup = match signal(SignalKind::hangup()) {
         Ok(signal) => signal,
         Err(err) => {
-            tracing::error!(error = %err, "не удалось подписаться на SIGHUP");
+            tracing::error!(error = %err, "could not subscribe to SIGHUP");
             return;
         }
     };
@@ -180,24 +180,24 @@ async fn watch_signals(shutdown: CancellationToken, registry: Arc<SharedRegistry
     loop {
         tokio::select! {
             _ = tokio::signal::ctrl_c() => {
-                tracing::info!("получен SIGINT, останавливаемся");
+                tracing::info!("received SIGINT, shutting down");
                 shutdown.cancel();
                 return;
             }
             _ = term.recv() => {
-                tracing::info!("получен SIGTERM, останавливаемся");
+                tracing::info!("received SIGTERM, shutting down");
                 shutdown.cancel();
                 return;
             }
             _ = hup.recv() => match registry.reload().await {
-                Ok(count) => tracing::info!(skills = count, "реестр скиллов перечитан"),
-                Err(err) => tracing::error!(error = %err, "перечитать скиллы не удалось"),
+                Ok(count) => tracing::info!(skills = count, "the skill registry was reloaded"),
+                Err(err) => tracing::error!(error = %err, "reloading the skills failed"),
             },
         }
     }
 }
 
-/// Связка воркера с пайплайном.
+/// Glue between the worker and the pipeline.
 struct PipelineHandler {
     pipeline: Arc<Pipeline>,
 }
@@ -208,15 +208,15 @@ impl JobHandler for PipelineHandler {
         let result = self.pipeline.execute(job).await?;
         match &result.outcome {
             Outcome::Review { findings } => {
-                tracing::info!(job = %job.id, findings, "ревью опубликовано");
+                tracing::info!(job = %job.id, findings, "the review was published");
             }
             Outcome::Patch { url } => {
-                tracing::info!(job = %job.id, url = %url, "pull request открыт");
+                tracing::info!(job = %job.id, url = %url, "the pull request is open");
             }
-            Outcome::NothingToDo => tracing::info!(job = %job.id, "нечего делать"),
-            Outcome::NoChanges => tracing::info!(job = %job.id, "скилл ничего не изменил"),
+            Outcome::NothingToDo => tracing::info!(job = %job.id, "nothing to do"),
+            Outcome::NoChanges => tracing::info!(job = %job.id, "the skill changed nothing"),
             Outcome::Rejected { reason } => {
-                tracing::info!(job = %job.id, reason, "команда отклонена");
+                tracing::info!(job = %job.id, reason, "the command was refused");
             }
         }
         Ok(())

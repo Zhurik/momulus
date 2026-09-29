@@ -1,4 +1,4 @@
-//! Шаги пайплайна вокруг единственного вызова модели.
+//! The pipeline steps around the single model call.
 
 use std::path::Path;
 
@@ -8,21 +8,21 @@ use momulus_workspace::Worktree;
 use crate::prompt::{FINDINGS_FILE, PromptContext, SUMMARY_FILE};
 use crate::validate::parse_review;
 
-/// Сколько всего попыток делаем на невалидный JSON: первая плюс одна повторная.
+/// Total attempts on invalid JSON: the first one plus a single retry.
 pub const MAX_ATTEMPTS: usize = 2;
 
-/// Результат review-шага.
+/// Result of the review step.
 #[derive(Debug, Clone)]
 pub struct ReviewStep {
     pub output: ReviewOutput,
-    /// Логи всех попыток, в порядке выполнения.
+    /// Logs of every attempt, in execution order.
     pub runs: Vec<RunResult>,
 }
 
-/// Результат patch-шага.
+/// Result of the patch step.
 #[derive(Debug, Clone)]
 pub struct PatchStep {
-    /// Содержимое `/out/summary.md`, если скилл его написал.
+    /// Contents of `/out/summary.md`, if the skill wrote one.
     pub summary: Option<String>,
     pub runs: Vec<RunResult>,
 }
@@ -33,10 +33,10 @@ impl ReviewStep {
     }
 }
 
-/// Запускает review-скилл и разбирает его вывод.
+/// Runs a review skill and parses its output.
 ///
-/// Если JSON невалиден, делаем ровно одну повторную попытку, передав модели
-/// текст ошибки. Вторая неудача — ошибка джобы.
+/// If the JSON is invalid we make exactly one more attempt, handing the model
+/// the parse error. A second failure fails the job.
 pub async fn run_review(
     runner: &dyn Runner,
     spec: RunSpec,
@@ -48,7 +48,7 @@ pub async fn run_review(
     let mut prompt = ctx.render();
 
     for attempt in 1..=MAX_ATTEMPTS {
-        // Чтобы не принять артефакт предыдущей попытки за новый.
+        // So we never mistake the previous attempt's artifact for a fresh one.
         let _ = std::fs::remove_file(&findings_path);
 
         let mut attempt_spec = spec.clone();
@@ -56,7 +56,7 @@ pub async fn run_review(
         let result = runner.run(attempt_spec).await?;
         let failure = check_run(&result, &spec);
         runs.push(result);
-        // Лог пишем сразу: он нужен и когда попытка провалилась.
+        // Write the log immediately: it matters even when the attempt failed.
         write_log(log_path, &runs);
         if let Some(err) = failure {
             return Err(err);
@@ -65,7 +65,7 @@ pub async fn run_review(
         match read_findings(&findings_path) {
             Ok(output) => return Ok(ReviewStep { output, runs }),
             Err(err) if attempt < MAX_ATTEMPTS => {
-                tracing::warn!(error = %err, "невалидный вывод модели, повторяем один раз");
+                tracing::warn!(error = %err, "invalid model output, retrying once");
                 prompt = ctx.render_retry(&err.to_string());
             }
             Err(err) => return Err(err),
@@ -73,12 +73,12 @@ pub async fn run_review(
     }
 
     Err(Error::InvalidOutput(
-        "модель не вернула валидный findings.json".into(),
+        "the model never returned a valid findings.json".into(),
     ))
 }
 
-/// Запускает patch-скилл. Формат вывода здесь не фиксирован, ретраить нечего:
-/// результат виден по изменениям в рабочей копии.
+/// Runs a patch skill. There is no fixed output format to retry on: the result
+/// shows up as changes in the working copy.
 pub async fn run_patch(
     runner: &dyn Runner,
     spec: RunSpec,
@@ -101,9 +101,9 @@ pub async fn run_patch(
     })
 }
 
-/// Собирает патч из рабочей копии: `None` — скилл ничего не изменил.
+/// Collects a patch from the working copy: `None` means the skill changed nothing.
 ///
-/// Коммит, ветку и pull request делает Publisher; здесь только факты о файлах.
+/// The commit, branch and pull request are the Publisher's job; this is just facts about files.
 pub async fn collect_patch(
     worktree: &Worktree,
     branch: String,
@@ -125,7 +125,7 @@ pub async fn collect_patch(
     }))
 }
 
-/// Превращает неуспешный прогон в ошибку с понятной причиной.
+/// Turns an unsuccessful run into an error with a readable reason.
 fn check_run(result: &RunResult, spec: &RunSpec) -> Option<Error> {
     if result.timed_out {
         return Some(Error::Timeout(spec.timeout));
@@ -136,9 +136,9 @@ fn check_run(result: &RunResult, spec: &RunSpec) -> Option<Error> {
             .lines()
             .rev()
             .find(|line| !line.trim().is_empty())
-            .unwrap_or("подробности в логе джобы");
+            .unwrap_or("see the job log for details");
         return Some(Error::Runner(format!(
-            "агент завершился с кодом {}: {}",
+            "the agent exited with code {}: {}",
             result.exit_code,
             tail.trim()
         )));
@@ -146,13 +146,13 @@ fn check_run(result: &RunResult, spec: &RunSpec) -> Option<Error> {
     None
 }
 
-/// Читает и разбирает `findings.json`.
+/// Reads and parses `findings.json`.
 fn read_findings(path: &Path) -> Result<ReviewOutput> {
     let raw = match std::fs::read_to_string(path) {
         Ok(raw) => raw,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
             return Err(Error::InvalidOutput(format!(
-                "файл {FINDINGS_FILE} не создан"
+                "the file {FINDINGS_FILE} was never created"
             )));
         }
         Err(err) => return Err(Error::InvalidOutput(format!("{FINDINGS_FILE}: {err}"))),
@@ -160,7 +160,7 @@ fn read_findings(path: &Path) -> Result<ReviewOutput> {
     parse_review(&raw)
 }
 
-/// Читает `summary.md`, если он есть.
+/// Reads `summary.md` when present.
 pub fn read_summary(out_dir: &Path) -> Option<String> {
     std::fs::read_to_string(out_dir.join(SUMMARY_FILE))
         .ok()
@@ -168,25 +168,25 @@ pub fn read_summary(out_dir: &Path) -> Option<String> {
         .filter(|text| !text.is_empty())
 }
 
-/// Пишет лог попыток в файл; ошибку записи только логируем.
+/// Writes the attempt log to a file; a write failure is only logged.
 fn write_log(log_path: Option<&Path>, runs: &[RunResult]) {
     let Some(path) = log_path else { return };
     if let Some(parent) = path.parent()
         && let Err(err) = std::fs::create_dir_all(parent)
     {
-        tracing::warn!(error = %err, path = %parent.display(), "каталог логов не создан");
+        tracing::warn!(error = %err, path = %parent.display(), "the log directory was not created");
         return;
     }
     if let Err(err) = std::fs::write(path, combined_log(runs)) {
-        tracing::warn!(error = %err, path = %path.display(), "лог не записан");
+        tracing::warn!(error = %err, path = %path.display(), "the log was not written");
     }
 }
 
-/// Склеивает логи всех попыток для файла джобы.
+/// Joins the logs of every attempt into the job's log file.
 pub fn combined_log(runs: &[RunResult]) -> String {
     let mut out = String::new();
     for (i, run) in runs.iter().enumerate() {
-        out.push_str(&format!("=== попытка {} ===\n", i + 1));
+        out.push_str(&format!("=== attempt {} ===\n", i + 1));
         out.push_str(&run.combined_log());
         out.push('\n');
     }
@@ -215,7 +215,7 @@ mod tests {
             contract: SkillContract::parse("proofread", contract).unwrap(),
             doc: SkillDoc {
                 name: "proofread".into(),
-                description: "описание".into(),
+                description: "description".into(),
                 body: String::new(),
             },
         }
@@ -231,8 +231,8 @@ mod tests {
             mount: Mount::ReadOnly,
             prompt: String::new(),
             tools: vec!["read".into(), "write".into()],
-            provider: "cloudru".into(),
-            model: Some("zai-org/GLM-5.1".into()),
+            provider: "openai".into(),
+            model: Some("gpt-5.1".into()),
             timeout: Duration::from_secs(60),
             image: "momulus-runner:latest".into(),
             cpu_limit: 1.0,
@@ -277,13 +277,13 @@ mod tests {
                 path: "/tmp/repo".into(),
             },
         };
-        let runner = FakeRunner::with_findings(r#"{"summary":"ок","findings":[]}"#);
+        let runner = FakeRunner::with_findings(r#"{"summary":"ok","findings":[]}"#);
         let step = run_review(&runner, spec(f.out.clone(), f.work.clone()), &ctx, None)
             .await
             .unwrap();
 
         assert_eq!(step.attempts(), 1);
-        assert_eq!(step.output.summary, "ок");
+        assert_eq!(step.output.summary, "ok");
     }
 
     #[tokio::test]
@@ -299,21 +299,20 @@ mod tests {
             },
         };
         let runner = FakeRunner::new(vec![
-            FakeResponse::findings("извини, не смог"),
-            FakeResponse::findings(r#"{"summary":"со второй попытки","findings":[]}"#),
+            FakeResponse::findings("sorry, I could not"),
+            FakeResponse::findings(r#"{"summary":"second time lucky","findings":[]}"#),
         ]);
         let step = run_review(&runner, spec(f.out.clone(), f.work.clone()), &ctx, None)
             .await
             .unwrap();
 
         assert_eq!(step.attempts(), 2);
-        assert_eq!(step.output.summary, "со второй попытки");
+        assert_eq!(step.output.summary, "second time lucky");
 
-        // Во втором промпте модели сообщили, что именно сломалось.
+        // The second prompt tells the model what exactly broke.
         let calls = runner.calls();
         assert!(
-            calls[1].prompt.contains("не прошла попытка")
-                || calls[1].prompt.contains("не прошла валидацию"),
+            calls[1].prompt.contains("failed validation"),
             "{}",
             calls[1].prompt
         );
@@ -338,9 +337,9 @@ mod tests {
             },
         };
         let runner = FakeRunner::new(vec![
-            FakeResponse::findings("не json"),
+            FakeResponse::findings("not json"),
             FakeResponse::findings(
-                r#"{"summary":"s","findings":[{"path":"a","line":1,"severity":"ой","body":"b"}]}"#,
+                r#"{"summary":"s","findings":[{"path":"a","line":1,"severity":"oops","body":"b"}]}"#,
             ),
         ]);
         let err = run_review(&runner, spec(f.out.clone(), f.work.clone()), &ctx, None)
@@ -348,7 +347,11 @@ mod tests {
             .unwrap_err();
 
         assert!(matches!(err, Error::InvalidOutput(_)), "{err:?}");
-        assert_eq!(runner.call_count(), 2, "больше двух попыток не делаем");
+        assert_eq!(
+            runner.call_count(),
+            2,
+            "we never make more than two attempts"
+        );
     }
 
     #[tokio::test]
@@ -368,17 +371,20 @@ mod tests {
             .await
             .unwrap_err();
 
-        assert!(err.to_string().contains("findings.json не создан"), "{err}");
+        assert!(
+            err.to_string().contains("findings.json was never created"),
+            "{err}"
+        );
         assert_eq!(runner.call_count(), 2);
     }
 
     #[tokio::test]
     async fn stale_artifact_is_not_reused() {
         let f = fixture();
-        // Артефакт от прошлой джобы в том же каталоге.
+        // An artifact left over from a previous job in the same directory.
         std::fs::write(
             f.out.join(FINDINGS_FILE),
-            r#"{"summary":"старое","findings":[]}"#,
+            r#"{"summary":"stale","findings":[]}"#,
         )
         .unwrap();
 
@@ -395,7 +401,7 @@ mod tests {
         let err = run_review(&runner, spec(f.out.clone(), f.work.clone()), &ctx, None)
             .await
             .unwrap_err();
-        assert!(err.to_string().contains("не создан"), "{err}");
+        assert!(err.to_string().contains("never created"), "{err}");
     }
 
     #[tokio::test]
@@ -464,13 +470,13 @@ mod tests {
         };
         let runner = FakeRunner::new(vec![FakeResponse::patch(
             vec![("posts/a.en.mdx".into(), "Hello\n".into())],
-            "  перевёл одну статью\n",
+            "  translated one post\n",
         )]);
         let mut spec = spec(f.out.clone(), f.work.clone());
         spec.mount = Mount::ReadWrite;
         let step = run_patch(&runner, spec, &ctx, None).await.unwrap();
 
-        assert_eq!(step.summary.as_deref(), Some("перевёл одну статью"));
+        assert_eq!(step.summary.as_deref(), Some("translated one post"));
         assert!(f.work.join("posts/a.en.mdx").exists());
     }
 
@@ -498,20 +504,20 @@ mod tests {
         let runs = vec![
             RunResult {
                 exit_code: 0,
-                stdout: "раз".into(),
+                stdout: "one".into(),
                 stderr: String::new(),
                 timed_out: false,
             },
             RunResult {
                 exit_code: 0,
-                stdout: "два".into(),
+                stdout: "two".into(),
                 stderr: String::new(),
                 timed_out: false,
             },
         ];
         let log = combined_log(&runs);
-        assert!(log.contains("=== попытка 1 ==="), "{log}");
-        assert!(log.contains("=== попытка 2 ==="), "{log}");
-        assert!(log.contains("раз") && log.contains("два"));
+        assert!(log.contains("=== attempt 1 ==="), "{log}");
+        assert!(log.contains("=== attempt 2 ==="), "{log}");
+        assert!(log.contains("one") && log.contains("two"));
     }
 }

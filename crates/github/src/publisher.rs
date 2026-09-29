@@ -1,4 +1,4 @@
-//! Publisher: публикует ревью, патчи, реакции и комментарии в GitHub.
+//! Publisher: posts reviews, patches, reactions and comments to GitHub.
 
 use std::sync::Arc;
 
@@ -18,16 +18,16 @@ use crate::models::{
     ReviewRequest,
 };
 
-/// Сколько строк diff'а показываем в блоке suggestion — ровно одну строку.
+/// The fence used for a suggested replacement of a single line.
 const SUGGESTION_FENCE: &str = "suggestion";
 
-/// Реализация [`Publisher`] для GitHub.
+/// GitHub implementation of [`Publisher`].
 pub struct GithubPublisher {
     clients: Arc<dyn ClientProvider>,
     git: Git,
     config: GithubConfig,
     backoff: Backoff,
-    /// Откуда берём токен для git push.
+    /// Where the token for git push comes from.
     access: Arc<dyn GitAccess>,
 }
 
@@ -60,7 +60,7 @@ impl GithubPublisher {
         self
     }
 
-    /// Тело inline-комментария: текст плюс блок предложения, если он есть.
+    /// Inline comment body: the text plus a suggestion block when present.
     pub fn comment_body(finding: &Finding) -> String {
         let mut body = format!("**{}**: {}", finding.severity.as_str(), finding.body.trim());
         if let Some(suggestion) = finding.suggestion.as_deref().map(str::trim_end)
@@ -71,7 +71,7 @@ impl GithubPublisher {
         body
     }
 
-    /// Собирает тело запроса создания ревью.
+    /// Builds the request body for creating a review.
     pub fn review_request(pr: &PrRef, findings: &[Finding], summary: &str) -> ReviewRequest {
         ReviewRequest {
             commit_id: pr.head_sha.clone(),
@@ -89,7 +89,7 @@ impl GithubPublisher {
         }
     }
 
-    /// POST без разбора ответа.
+    /// POST without parsing the response.
     async fn post_empty<B: serde::Serialize + Sync>(
         &self,
         pr: &PrRef,
@@ -108,7 +108,7 @@ impl GithubPublisher {
             .await
     }
 
-    /// Путь до реакций на комментарий нужного типа.
+    /// The reactions route for a comment of the given kind.
     fn reactions_route(pr: &PrRef, job: &JobRef) -> String {
         let kind = match job.comment.kind {
             momulus_core::CommentKind::Issue => "issues",
@@ -120,7 +120,7 @@ impl GithubPublisher {
         )
     }
 
-    /// Ветка, свободная на remote: при коллизии добавляем короткий SHA.
+    /// A branch name free on the remote: on a collision we append a short SHA.
     async fn free_branch(&self, pr: &PrRef, wanted: &str, token: Option<&str>) -> Result<String> {
         let remote = pr.clone_url.clone();
         let exists = |name: &str| {
@@ -153,12 +153,12 @@ impl GithubPublisher {
             return Ok(suffixed);
         }
         Err(Error::Git(format!(
-            "ветки {wanted} и {suffixed} уже заняты"
+            "the branches {wanted} and {suffixed} are both taken"
         )))
     }
 }
 
-/// Первые семь символов SHA.
+/// The first seven characters of a SHA.
 fn short_sha(sha: &str) -> String {
     sha.chars().take(7).collect()
 }
@@ -188,7 +188,7 @@ impl Publisher for GithubPublisher {
     async fn push_and_open_pr(&self, pr: &PrRef, patch: &Patch) -> Result<Url> {
         if pr.is_fork() {
             return Err(Error::Unsupported(format!(
-                "PR из форка {}: push в него недоступен",
+                "the PR comes from the fork {}: pushing there is not possible",
                 pr.head_repo
             )));
         }
@@ -196,7 +196,7 @@ impl Publisher for GithubPublisher {
         let token = self.access.git_token(pr).await?;
         let worktree = patch.worktree.as_path();
 
-        // Коммит делает оркестратор: агент git не касается.
+        // The orchestrator makes the commit: the agent never touches git.
         self.git.run(Some(worktree), ["add", "--all"]).await?;
         self.git
             .run(
@@ -234,7 +234,7 @@ impl Publisher for GithubPublisher {
         let body = CreatePullRequest {
             title: patch.title.clone(),
             head: branch.clone(),
-            // База — head-ветка исходного PR: изменения вливаются в него.
+            // The base is the head branch of the original PR: changes flow into it.
             base: pr.head_ref.clone(),
             body: patch.body.clone(),
             maintainer_can_modify: true,
@@ -251,7 +251,7 @@ impl Publisher for GithubPublisher {
             .await?;
 
         Url::parse(&created.html_url)
-            .map_err(|e| Error::Internal(format!("ссылка на PR не разбирается: {e}")))
+            .map_err(|e| Error::Internal(format!("the PR link cannot be parsed: {e}")))
     }
 
     async fn comment(&self, pr: &PrRef, body: &str) -> Result<()> {
@@ -294,7 +294,7 @@ mod tests {
             path: "posts/dns.md".into(),
             line: 18,
             severity: Severity::Typo,
-            body: "Тавтология: «красивое красивое»".into(),
+            body: "Repetition: \"a nice nice domain\"".into(),
             suggestion: suggestion.map(str::to_string),
         }
     }
@@ -302,12 +302,12 @@ mod tests {
     #[test]
     fn comment_body_without_suggestion() {
         let body = GithubPublisher::comment_body(&finding(None));
-        assert_eq!(body, "**typo**: Тавтология: «красивое красивое»");
+        assert_eq!(body, "**typo**: Repetition: \"a nice nice domain\"");
     }
 
     #[test]
     fn comment_body_with_suggestion_block() {
-        let body = GithubPublisher::comment_body(&finding(Some("красивое доменное имя\n")));
+        let body = GithubPublisher::comment_body(&finding(Some("a nice domain name\n")));
         insta::assert_snapshot!("suggestion_comment", body);
     }
 
@@ -321,15 +321,15 @@ mod tests {
     fn review_request_payload_snapshot() {
         let request = GithubPublisher::review_request(
             &pr(),
-            &[finding(Some("красивое доменное имя")), finding(None)],
-            "Нашёл две проблемы.",
+            &[finding(Some("a nice domain name")), finding(None)],
+            "Found two problems.",
         );
         insta::assert_json_snapshot!("review_request", request);
     }
 
     #[test]
     fn review_request_without_findings_omits_comments() {
-        let request = GithubPublisher::review_request(&pr(), &[], "Замечаний нет.");
+        let request = GithubPublisher::review_request(&pr(), &[], "No findings.");
         let json = serde_json::to_value(&request).unwrap();
         assert!(json.get("comments").is_none(), "{json}");
         assert_eq!(json["event"], "COMMENT");

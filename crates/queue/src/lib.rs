@@ -1,4 +1,4 @@
-//! Хранилище очереди: SQLite через sqlx.
+//! Queue storage: SQLite via sqlx.
 
 pub mod jobs;
 pub mod store;
@@ -15,17 +15,17 @@ use momulus_core::{Error, Result};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::{Row, SqlitePool};
 
-/// Миграции лежат в корне репозитория и вшиваются в бинарник.
+/// Migrations live in the repository root and are embedded into the binary.
 pub static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("../../migrations");
 
-/// Пул соединений с применёнными миграциями.
+/// A connection pool with the migrations already applied.
 #[derive(Debug, Clone)]
 pub struct Db {
     pool: SqlitePool,
 }
 
 impl Db {
-    /// Открывает (и создаёт при необходимости) файловую БД.
+    /// Opens (and creates if needed) a file-backed database.
     pub async fn open(path: &Path) -> Result<Db> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)
@@ -40,7 +40,7 @@ impl Db {
         Db::connect(options).await
     }
 
-    /// БД в памяти — для тестов.
+    /// An in-memory database — for tests.
     pub async fn open_in_memory() -> Result<Db> {
         let options = SqliteConnectOptions::from_str("sqlite::memory:")
             .map_err(|e| Error::Storage(e.to_string()))?
@@ -50,7 +50,7 @@ impl Db {
 
     async fn connect(options: SqliteConnectOptions) -> Result<Db> {
         let pool = SqlitePoolOptions::new()
-            // SQLite в памяти живёт, пока жив коннект: держим ровно один.
+            // An in-memory SQLite database lives as long as the connection: keep exactly one.
             .max_connections(1)
             .connect_with(options)
             .await
@@ -66,12 +66,12 @@ impl Db {
         &self.pool
     }
 
-    /// Закрывает пул; используется при graceful shutdown.
+    /// Closes the pool; used during graceful shutdown.
     pub async fn close(&self) {
         self.pool.close().await;
     }
 
-    /// Список таблиц — нужен тестам и диагностике.
+    /// The table list — used by tests and diagnostics.
     pub async fn tables(&self) -> Result<Vec<String>> {
         let rows = sqlx::query("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
             .fetch_all(&self.pool)

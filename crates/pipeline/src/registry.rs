@@ -1,4 +1,4 @@
-//! Реестр скиллов, который можно перечитать на SIGHUP.
+//! A skill registry that can be reloaded on SIGHUP.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -8,7 +8,7 @@ use momulus_core::{Result, SkillCatalog};
 use momulus_skills::{Registry, Skill};
 use tokio::sync::RwLock;
 
-/// Разделяемый реестр: один объект и для Trigger'а, и для пайплайна.
+/// A shared registry: one object for both the Trigger and the pipeline.
 #[derive(Debug)]
 pub struct SharedRegistry {
     dir: PathBuf,
@@ -16,7 +16,7 @@ pub struct SharedRegistry {
 }
 
 impl SharedRegistry {
-    /// Читает каталог скиллов.
+    /// Reads the skills directory.
     pub fn load(dir: &Path) -> Result<Arc<SharedRegistry>> {
         let registry = Registry::load(dir)?;
         Ok(Arc::new(SharedRegistry {
@@ -25,7 +25,7 @@ impl SharedRegistry {
         }))
     }
 
-    /// Перечитывает каталог. При ошибке прежний реестр остаётся в силе.
+    /// Re-reads the directory. On failure the previous registry stays in place.
     pub async fn reload(&self) -> Result<usize> {
         let fresh = Registry::load(&self.dir)?;
         let count = fresh.len();
@@ -33,7 +33,7 @@ impl SharedRegistry {
         Ok(count)
     }
 
-    /// Копия скилла по имени.
+    /// A copy of the skill with this name.
     pub async fn skill(&self, name: &str) -> Option<Skill> {
         self.registry.read().await.get(name).ok().cloned()
     }
@@ -78,7 +78,7 @@ mod tests {
         .unwrap();
         std::fs::write(
             dir.join("SKILL.md"),
-            format!("---\nname: {name}\ndescription: описание {name}\n---\n"),
+            format!("---\nname: {name}\ndescription: description of {name}\n---\n"),
         )
         .unwrap();
     }
@@ -113,7 +113,7 @@ mod tests {
         write_skill(tmp.path(), "proofread");
         let shared = SharedRegistry::load(tmp.path()).unwrap();
 
-        // Ломаем контракт: patch без tools.
+        // Break a contract: patch mode without tools.
         let broken = tmp.path().join("broken");
         std::fs::create_dir_all(&broken).unwrap();
         std::fs::write(broken.join("skill.toml"), "mode = \"patch\"\n").unwrap();
@@ -124,7 +124,10 @@ mod tests {
         .unwrap();
 
         assert!(shared.reload().await.is_err());
-        assert!(shared.contains("proofread").await, "прежний реестр цел");
+        assert!(
+            shared.contains("proofread").await,
+            "the previous registry is intact"
+        );
         assert!(!shared.contains("broken").await);
     }
 }

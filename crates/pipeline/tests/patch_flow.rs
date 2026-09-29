@@ -1,4 +1,4 @@
-//! Сборка патча из настоящей рабочей копии.
+//! Collecting a patch from a real working copy.
 
 use std::path::Path;
 use std::process::Command;
@@ -17,7 +17,7 @@ fn git(dir: &Path, args: &[&str]) -> String {
         .env("GIT_COMMITTER_NAME", "test")
         .env("GIT_COMMITTER_EMAIL", "test@example.com")
         .output()
-        .expect("git запускается");
+        .expect("git starts");
     assert!(
         out.status.success(),
         "git {args:?}: {}",
@@ -26,13 +26,13 @@ fn git(dir: &Path, args: &[&str]) -> String {
     String::from_utf8_lossy(&out.stdout).trim().to_string()
 }
 
-/// Репозиторий с одной статьёй; возвращает head-коммит.
+/// A repository with a single post; returns the head commit.
 fn fixture_repo(dir: &Path) -> String {
     std::fs::create_dir_all(dir.join("posts")).unwrap();
     git(dir, &["init", "--quiet", "--initial-branch=main"]);
-    std::fs::write(dir.join("posts/hello.mdx"), "# Привет\n\nтекст\n").unwrap();
+    std::fs::write(dir.join("posts/hello.mdx"), "# Hello\n\ntext\n").unwrap();
     git(dir, &["add", "."]);
-    git(dir, &["commit", "--quiet", "-m", "статья"]);
+    git(dir, &["commit", "--quiet", "-m", "the post"]);
     git(dir, &["rev-parse", "HEAD"])
 }
 
@@ -63,10 +63,10 @@ async fn collects_changes_made_in_the_worktree() {
         .await
         .unwrap();
 
-    // Так работает patch-скилл: правит существующий файл и создаёт новый.
+    // This is what a patch skill does: edits an existing file and adds a new one.
     std::fs::write(
         worktree.path().join("posts/hello.mdx"),
-        "# Привет\n\nисправленный текст\n",
+        "# Hello\n\nfixed text\n",
     )
     .unwrap();
     std::fs::write(worktree.path().join("posts/hello.en.mdx"), "# Hello\n").unwrap();
@@ -74,13 +74,13 @@ async fn collects_changes_made_in_the_worktree() {
     let patch = collect_patch(
         &worktree,
         "llm/translate-en-42".into(),
-        "momulus: translate для #42".into(),
-        "тело PR".into(),
-        "momulus: перевод".into(),
+        "momulus: translate for #42".into(),
+        "PR body".into(),
+        "momulus: translation".into(),
     )
     .await
     .unwrap()
-    .expect("изменения есть");
+    .expect("there are changes");
 
     assert_eq!(patch.branch, "llm/translate-en-42");
     assert_eq!(
@@ -112,7 +112,7 @@ async fn no_changes_means_no_patch() {
     .await
     .unwrap();
 
-    assert!(patch.is_none(), "скилл ничего не изменил");
+    assert!(patch.is_none(), "the skill changed nothing");
 }
 
 #[tokio::test]
@@ -124,12 +124,8 @@ async fn rewriting_a_file_with_the_same_content_is_not_a_change() {
         .await
         .unwrap();
 
-    // Агент «переписал» файл тем же содержимым — коммитить нечего.
-    std::fs::write(
-        worktree.path().join("posts/hello.mdx"),
-        "# Привет\n\nтекст\n",
-    )
-    .unwrap();
+    // The agent "rewrote" the file with identical content — nothing to commit.
+    std::fs::write(worktree.path().join("posts/hello.mdx"), "# Hello\n\ntext\n").unwrap();
 
     let patch = collect_patch(
         &worktree,

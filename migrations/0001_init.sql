@@ -1,4 +1,4 @@
--- Джобы: одна команда `/llm` из одного комментария.
+-- Jobs: one `/llm` command from one comment.
 CREATE TABLE jobs (
     id             TEXT    PRIMARY KEY,
     platform       TEXT    NOT NULL,
@@ -19,11 +19,11 @@ CREATE TABLE jobs (
     log_path       TEXT
 );
 
--- Один комментарий порождает не больше одной джобы.
+-- A comment produces at most one job.
 CREATE UNIQUE INDEX jobs_comment_unique ON jobs (platform, comment_id);
 CREATE INDEX jobs_status_created ON jobs (status, created_at);
 
--- Курсор опроса на каждый репозиторий и поток комментариев.
+-- Polling cursor per repository and comment stream.
 CREATE TABLE repo_cursors (
     repo_key   TEXT NOT NULL,
     stream     TEXT NOT NULL,
@@ -32,8 +32,8 @@ CREATE TABLE repo_cursors (
     PRIMARY KEY (repo_key, stream)
 );
 
--- Все уже разобранные комментарии, включая те, что не стали джобами
--- (невалидная команда, чужой автор) — чтобы не отвечать на них дважды.
+-- Every comment we already handled, including those that did not become jobs
+-- (invalid command, unknown author) — so we never answer one twice.
 CREATE TABLE seen_comments (
     platform   TEXT    NOT NULL,
     comment_id INTEGER NOT NULL,

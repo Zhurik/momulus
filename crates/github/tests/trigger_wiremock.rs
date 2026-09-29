@@ -1,4 +1,4 @@
-//! Trigger против фейкового GitHub API.
+//! Trigger against a fake GitHub API.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -12,7 +12,7 @@ use serde_json::json;
 use wiremock::matchers::{method, path, query_param, query_param_is_missing};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-/// Клиент octocrab, направленный на mock-сервер.
+/// An octocrab client pointed at the mock server.
 fn client(server: &MockServer) -> Octocrab {
     Octocrab::builder()
         .add_retry_config(octocrab::service::middleware::retry::RetryConfig::None)
@@ -77,7 +77,7 @@ fn pull_json() -> serde_json::Value {
     })
 }
 
-/// Пустой поток review-комментариев: в большинстве тестов он не нужен.
+/// An empty review-comment stream: most tests do not need it.
 async fn mock_empty_review_comments(server: &MockServer) {
     Mock::given(method("GET"))
         .and(path("/repos/acme/blog/pulls/comments"))
@@ -94,7 +94,7 @@ async fn command_in_issue_comment_becomes_a_job() {
         .and(query_param("sort", "updated"))
         .and(query_param_is_missing("since"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!([
-            issue_comment(1001, "просто болтовня", "zhurik", "2026-09-29T09:00:00Z"),
+            issue_comment(1001, "just chatting", "zhurik", "2026-09-29T09:00:00Z"),
             issue_comment(1002, "/llm proofread", "zhurik", "2026-09-29T10:00:00Z"),
         ])))
         .mount(&server)
@@ -122,19 +122,19 @@ async fn command_in_issue_comment_becomes_a_job() {
     assert_eq!(job.pr.head_sha, "abc1234def");
     assert_eq!(job.pr.base_ref, "main");
 
-    // Курсор встал на самый свежий комментарий.
+    // The cursor moved to the newest comment.
     let cursor = store
         .cursor("github:acme/blog", STREAM_ISSUE)
         .await
         .unwrap()
-        .expect("курсор сохранён");
+        .expect("the cursor was stored");
     assert_eq!(cursor.to_rfc3339(), "2026-09-29T10:00:00+00:00");
 }
 
 #[tokio::test]
 async fn second_poll_sends_since_and_skips_duplicates() {
     let server = MockServer::start().await;
-    // Первый запрос — без since, второй — с ним.
+    // The first request has no since, the second one does.
     Mock::given(method("GET"))
         .and(path("/repos/acme/blog/issues/comments"))
         .and(query_param_is_missing("since"))
@@ -152,7 +152,7 @@ async fn second_poll_sends_since_and_skips_duplicates() {
     Mock::given(method("GET"))
         .and(path("/repos/acme/blog/issues/comments"))
         .and(query_param("since", "2026-09-29T10:00:00+00:00"))
-        // GitHub отдаёт since включительно — тот же комментарий приходит снова.
+        // GitHub treats since as inclusive — the same comment comes back.
         .respond_with(
             ResponseTemplate::new(200).set_body_json(json!([issue_comment(
                 1002,
@@ -178,7 +178,7 @@ async fn second_poll_sends_since_and_skips_duplicates() {
     assert_eq!(
         trigger.poll_once().await.unwrap().len(),
         0,
-        "дедупликация по id комментария"
+        "deduplicated by comment id"
     );
 }
 
@@ -206,13 +206,13 @@ async fn command_from_a_stranger_is_ignored_silently() {
         .unwrap();
 
     assert!(jobs.is_empty());
-    // Ни комментариев, ни запроса PR — совсем ничего.
+    // No comments, no PR lookup — nothing at all.
     let requests = server.received_requests().await.unwrap();
     assert!(
         requests
             .iter()
             .all(|r| r.method == wiremock::http::Method::GET),
-        "боту нечего отвечать постороннему"
+        "the bot has nothing to say to a stranger"
     );
 }
 
@@ -252,7 +252,7 @@ async fn unknown_skill_gets_a_help_comment() {
         .unwrap()
         .into_iter()
         .find(|r| r.method == wiremock::http::Method::POST)
-        .expect("help-комментарий отправлен");
+        .expect("a help comment was posted");
     let body: serde_json::Value = serde_json::from_slice(&posted.body).unwrap();
     let text = body["body"].as_str().unwrap();
     assert!(text.contains("proofraed"), "{text}");
@@ -320,7 +320,7 @@ async fn command_in_review_thread_becomes_a_job() {
         .await;
 
     let store = Arc::new(MemoryCursorStore::new());
-    // Скилла "review" в каталоге нет, зато есть proofread — проверим оба пути.
+    // The catalog has "review" here — this checks the review-comment stream.
     let trigger = GithubTrigger::new(
         TriggerConfig {
             poll_interval: Duration::from_millis(10),
@@ -389,7 +389,7 @@ async fn closed_pull_request_is_answered_not_queued() {
 #[tokio::test]
 async fn rate_limit_is_retried_with_backoff() {
     let server = MockServer::start().await;
-    // Первый ответ — 429, второй — нормальный список.
+    // The first response is a 429, the second one is a normal list.
     Mock::given(method("GET"))
         .and(path("/repos/acme/blog/issues/comments"))
         .respond_with(ResponseTemplate::new(429).set_body_json(json!({
@@ -425,7 +425,11 @@ async fn rate_limit_is_retried_with_backoff() {
         .poll_once()
         .await
         .unwrap();
-    assert_eq!(jobs.len(), 1, "после повтора команда всё же разобрана");
+    assert_eq!(
+        jobs.len(),
+        1,
+        "after the retry the command was parsed after all"
+    );
 }
 
 #[tokio::test]
@@ -467,7 +471,7 @@ async fn repo_outside_allowlist_is_not_polled() {
     assert!(trigger.poll_once().await.unwrap().is_empty());
     assert!(
         server.received_requests().await.unwrap().is_empty(),
-        "к API вообще не обращались"
+        "the API was not called at all"
     );
 }
 

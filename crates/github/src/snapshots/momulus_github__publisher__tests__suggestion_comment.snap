@@ -1,10 +1,9 @@
 ---
 source: crates/github/src/publisher.rs
-assertion_line: 327
 expression: body
 ---
-**typo**: Тавтология: «красивое красивое»
+**typo**: Repetition: "a nice nice domain"
 
 ```suggestion
-красивое доменное имя
+a nice domain name
 ```

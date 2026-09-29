@@ -1,4 +1,4 @@
-//! Разбор и валидация `skill.toml` — контракта скилла для оркестратора.
+//! Parsing and validation of `skill.toml` — the skill contract for the orchestrator.
 
 use std::collections::BTreeMap;
 use std::time::Duration;
@@ -8,13 +8,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{SkillError, SkillResult};
 
-/// Режим работы скилла.
+/// Skill mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Mode {
-    /// Модель ищет замечания, мы публикуем ревью.
+    /// The model looks for findings, we publish a review.
     Review,
-    /// Модель правит файлы, мы коммитим и открываем PR.
+    /// The model edits files, we commit and open a PR.
     Patch,
 }
 
@@ -33,41 +33,41 @@ impl std::fmt::Display for Mode {
     }
 }
 
-/// Содержимое `skill.toml` как оно записано в файле.
+/// The contents of `skill.toml` exactly as written in the file.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SkillContract {
     pub mode: Mode,
 
-    /// Инструменты, которые получит pi (`--tools`).
+    /// Tools handed to pi (`--tools`).
     #[serde(default)]
     pub tools: Vec<String>,
 
-    /// Глобы по изменённым файлам PR; пусто — берём все файлы.
+    /// Globs over the changed PR files; empty means every file.
     #[serde(default)]
     pub files: Vec<String>,
 
-    /// Имена аргументов команды; позиционные args мапятся в этом порядке.
+    /// Command argument names; positional args map onto them in this order.
     #[serde(default)]
     pub args: Vec<String>,
 
-    /// Таймаут одного прогона.
+    /// Timeout for a single run.
     #[serde(with = "humantime_serde", default = "default_timeout")]
     pub timeout: Duration,
 
-    /// Модель; пусто — значение из конфига.
+    /// Model; empty means the value from the config.
     #[serde(default)]
     pub model: String,
 
-    /// Максимум inline-комментариев (только review).
+    /// Maximum number of inline comments (review only).
     #[serde(default)]
     pub max_comments: Option<usize>,
 
-    /// Шаблон имени ветки (только patch).
+    /// Branch name template (patch only).
     #[serde(default)]
     pub branch: Option<String>,
 
-    /// Произвольные переменные контракта, попадают в промпт как есть.
+    /// Free-form contract variables, passed into the prompt as is.
     #[serde(default)]
     pub vars: BTreeMap<String, String>,
 }
@@ -76,13 +76,13 @@ fn default_timeout() -> Duration {
     Duration::from_secs(600)
 }
 
-/// Значение `max_comments` по умолчанию.
+/// Default value of `max_comments`.
 pub const DEFAULT_MAX_COMMENTS: usize = 30;
-/// Шаблон ветки по умолчанию.
+/// Default branch template.
 pub const DEFAULT_BRANCH_TEMPLATE: &str = "llm/{skill}-{pr}";
 
 impl SkillContract {
-    /// Разбирает и валидирует контракт.
+    /// Parses and validates the contract.
     pub fn parse(skill: &str, text: &str) -> SkillResult<SkillContract> {
         let contract: SkillContract = toml::from_str(text).map_err(|e| SkillError::Contract {
             skill: skill.to_string(),
@@ -100,40 +100,40 @@ impl SkillContract {
 
         if self.tools.is_empty() && self.mode == Mode::Patch {
             return Err(fail(
-                "mode = \"patch\" требует непустой tools: агент должен уметь править файлы".into(),
+                "mode = \"patch\" requires a non-empty tools list: the agent must be able to edit files".into(),
             ));
         }
-        // Без write агент не сможет записать артефакт: в review это findings.json,
-        // в patch — правки файлов. Рабочую копию review-скилла защищает
-        // не отсутствие write, а монтирование /work только для чтения.
+        // Without write the agent cannot produce an artifact: findings.json in review
+        // mode, edited files in patch mode. A review skill's working copy is protected
+        // by mounting /work read-only, not by withholding the write tool.
         if !self.tools.is_empty() && !self.tools.iter().any(|t| t == "write") {
             let what = match self.mode {
-                Mode::Review => "записать /out/findings.json",
-                Mode::Patch => "создавать файлы",
+                Mode::Review => "write /out/findings.json",
+                Mode::Patch => "create files",
             };
             return Err(fail(format!(
-                "в tools нет \"write\", а без него агент не сможет {what}"
+                "tools has no \"write\", and without it the agent cannot {what}"
             )));
         }
         for tool in &self.tools {
             if tool.trim().is_empty() {
-                return Err(fail("tools содержит пустую строку".into()));
+                return Err(fail("tools contains an empty string".into()));
             }
         }
         if self.timeout.is_zero() {
-            return Err(fail("timeout должен быть больше нуля".into()));
+            return Err(fail("timeout must be greater than zero".into()));
         }
         if self.timeout > Duration::from_secs(3600) {
-            return Err(fail("timeout больше часа — так не делаем".into()));
+            return Err(fail("timeout over an hour is not allowed".into()));
         }
-        // Глобы проверяем сразу, чтобы ошибка была видна при старте, а не в джобе.
+        // Globs are checked eagerly so the error shows up at startup, not mid-job.
         self.file_filter()
-            .map_err(|e| fail(format!("невалидный glob в files: {e}")))?;
+            .map_err(|e| fail(format!("invalid glob in files: {e}")))?;
 
         for arg in &self.args {
             if arg.is_empty() || !arg.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
                 return Err(fail(format!(
-                    "имя аргумента {arg:?} должно состоять из букв, цифр и _"
+                    "argument name {arg:?} must consist of letters, digits and _"
                 )));
             }
         }
@@ -141,23 +141,21 @@ impl SkillContract {
         match self.mode {
             Mode::Review => {
                 if self.branch.is_some() {
-                    return Err(fail(
-                        "branch имеет смысл только при mode = \"patch\"".into(),
-                    ));
+                    return Err(fail("branch only makes sense with mode = \"patch\"".into()));
                 }
                 if self.max_comments == Some(0) {
-                    return Err(fail("max_comments должен быть больше нуля".into()));
+                    return Err(fail("max_comments must be greater than zero".into()));
                 }
             }
             Mode::Patch => {
                 if self.max_comments.is_some() {
                     return Err(fail(
-                        "max_comments имеет смысл только при mode = \"review\"".into(),
+                        "max_comments only makes sense with mode = \"review\"".into(),
                     ));
                 }
                 if let Some(branch) = &self.branch {
                     if branch.trim().is_empty() {
-                        return Err(fail("branch не может быть пустым".into()));
+                        return Err(fail("branch cannot be empty".into()));
                     }
                     for placeholder in placeholders(branch) {
                         let known = placeholder == "skill"
@@ -165,7 +163,7 @@ impl SkillContract {
                             || self.args.iter().any(|a| a == placeholder);
                         if !known {
                             return Err(fail(format!(
-                                "branch использует неизвестный placeholder {{{placeholder}}}"
+                                "branch uses an unknown placeholder {{{placeholder}}}"
                             )));
                         }
                     }
@@ -175,7 +173,7 @@ impl SkillContract {
         Ok(())
     }
 
-    /// Компилирует глобы фильтра файлов; `None` — фильтра нет.
+    /// Compiles the file filter globs; `None` means there is no filter.
     pub fn file_filter(&self) -> Result<Option<GlobSet>, globset::Error> {
         if self.files.is_empty() {
             return Ok(None);
@@ -187,14 +185,14 @@ impl SkillContract {
         builder.build().map(Some)
     }
 
-    /// Отбирает из списка изменённых файлов те, что подходят скиллу.
+    /// Selects the changed files that match the skill.
     pub fn select_files<'a, I>(&self, files: I) -> SkillResult<Vec<String>>
     where
         I: IntoIterator<Item = &'a str>,
     {
         let filter = self
             .file_filter()
-            .map_err(|e| SkillError::Internal(format!("невалидный glob: {e}")))?;
+            .map_err(|e| SkillError::Internal(format!("invalid glob: {e}")))?;
         Ok(files
             .into_iter()
             .filter(|path| filter.as_ref().is_none_or(|set| set.is_match(path)))
@@ -210,7 +208,7 @@ impl SkillContract {
         self.branch.as_deref().unwrap_or(DEFAULT_BRANCH_TEMPLATE)
     }
 
-    /// Имя ветки для патча: подставляет {skill}, {pr} и аргументы скилла.
+    /// Branch name for a patch: substitutes {skill}, {pr} and the skill arguments.
     pub fn branch_name(&self, skill: &str, pr: u64, args: &BTreeMap<String, String>) -> String {
         let mut out = self
             .branch_template()
@@ -222,10 +220,10 @@ impl SkillContract {
         out
     }
 
-    /// Сопоставляет аргументы команды с именами из контракта.
+    /// Maps command arguments onto the names declared in the contract.
     ///
-    /// Позиционные значения раздаются по порядку `args`, именованные должны
-    /// совпадать с объявленными.
+    /// Positional values are handed out in `args` order; named ones must match
+    /// a declared name.
     pub fn resolve_args(
         &self,
         skill: &str,
@@ -240,7 +238,7 @@ impl SkillContract {
         for (key, value) in &args.named {
             if !self.args.contains(key) {
                 return Err(fail(format!(
-                    "неизвестный аргумент {key:?}; скилл принимает: {}",
+                    "unknown argument {key:?}; the skill accepts: {}",
                     self.args_help()
                 )));
             }
@@ -261,7 +259,7 @@ impl SkillContract {
                 }
                 None => {
                     return Err(fail(format!(
-                        "лишний аргумент {value:?}; скилл принимает: {}",
+                        "extra argument {value:?}; the skill accepts: {}",
                         self.args_help()
                     )));
                 }
@@ -275,25 +273,22 @@ impl SkillContract {
             .map(String::as_str)
             .collect();
         if !missing.is_empty() {
-            return Err(fail(format!(
-                "не хватает аргументов: {}",
-                missing.join(", ")
-            )));
+            return Err(fail(format!("missing arguments: {}", missing.join(", "))));
         }
         Ok(resolved)
     }
 
     fn args_help(&self) -> String {
         if self.args.is_empty() {
-            "нет аргументов".to_string()
+            "no arguments".to_string()
         } else {
             self.args.join(", ")
         }
     }
 }
 
-/// Сжимает многострочную ошибку toml до "описание (позиция)".
-/// Имена в фигурных скобках из шаблона.
+/// Compresses a multi-line toml error into "reason (position)".
+/// Names wrapped in braces inside a template.
 fn placeholders(template: &str) -> Vec<&str> {
     let mut out = Vec::new();
     let mut rest = template;
@@ -310,7 +305,7 @@ fn placeholders(template: &str) -> Vec<&str> {
     out
 }
 
-/// Приводит значение аргумента к безопасному для имени ветки виду.
+/// Turns an argument value into something safe for a branch name.
 fn slugify(value: &str) -> String {
     let slug: String = value
         .chars()
@@ -448,7 +443,7 @@ mod tests {
     #[test]
     fn rejects_bad_arg_names() {
         let err = SkillContract::parse("x", "mode = \"review\"\nargs = [\"la ng\"]").unwrap_err();
-        assert!(err.to_string().contains("аргумент"), "{err}");
+        assert!(err.to_string().contains("argument name"), "{err}");
     }
 
     #[test]
@@ -535,7 +530,7 @@ mod tests {
 
         let cmd = Command::parse("/llm translate en de").unwrap();
         let err = c.resolve_args("translate", &cmd.args).unwrap_err();
-        assert!(err.to_string().contains("лишний"), "{err}");
+        assert!(err.to_string().contains("extra argument"), "{err}");
     }
 
     #[test]

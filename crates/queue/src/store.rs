@@ -1,4 +1,4 @@
-//! Хранилище курсоров опроса и разобранных комментариев.
+//! Storage for polling cursors and handled comments.
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -7,7 +7,7 @@ use sqlx::Row;
 
 use crate::Db;
 
-/// Реализация [`CursorStore`] на SQLite.
+/// SQLite-backed implementation of [`CursorStore`].
 #[derive(Debug, Clone)]
 pub struct Store {
     db: Db,
@@ -37,7 +37,7 @@ impl CursorStore for Store {
         let Some(row) = row else { return Ok(None) };
         let raw: String = row.get("cursor");
         let parsed = DateTime::parse_from_rfc3339(&raw)
-            .map_err(|e| Error::Storage(format!("курсор {raw:?} не разбирается: {e}")))?;
+            .map_err(|e| Error::Storage(format!("cursor {raw:?} cannot be parsed: {e}")))?;
         Ok(Some(parsed.with_timezone(&Utc)))
     }
 
@@ -58,7 +58,7 @@ impl CursorStore for Store {
     }
 
     async fn mark_seen(&self, platform: &str, comment_id: u64) -> Result<bool> {
-        // Вставка с игнорированием конфликта: число затронутых строк и есть ответ.
+        // Insert-or-ignore: the number of affected rows is the answer.
         let result = sqlx::query(
             "INSERT OR IGNORE INTO seen_comments (platform, comment_id, seen_at)
              VALUES (?1, ?2, ?3)",
@@ -120,7 +120,7 @@ mod tests {
             .await
             .unwrap()
             .get("n");
-        assert_eq!(count, 1, "одна строка на пару репозиторий+поток");
+        assert_eq!(count, 1, "one row per repository+stream pair");
     }
 
     #[tokio::test]
@@ -145,7 +145,7 @@ mod tests {
         let store = store().await;
         assert!(store.mark_seen("github", 1001).await.unwrap());
         assert!(!store.mark_seen("github", 1001).await.unwrap());
-        // Другая платформа — независимое пространство id.
+        // A different platform has an independent id space.
         assert!(store.mark_seen("gitlab", 1001).await.unwrap());
     }
 
@@ -165,7 +165,7 @@ mod tests {
         assert_eq!(store.cursor("r", "s").await.unwrap(), Some(value));
         assert!(
             !store.mark_seen("github", 7).await.unwrap(),
-            "память о комментарии сохранилась"
+            "the memory of that comment survived"
         );
     }
 }

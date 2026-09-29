@@ -1,4 +1,4 @@
-//! CLI сервиса momulus.
+//! The momulus command-line interface.
 
 mod cli;
 mod commands;

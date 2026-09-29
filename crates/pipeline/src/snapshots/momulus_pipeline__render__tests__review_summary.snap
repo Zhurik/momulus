@@ -1,22 +1,21 @@
 ---
 source: crates/pipeline/src/render.rs
-assertion_line: 251
 expression: "review_summary(&result, &ctx(\"/llm proofread\", \"proofread\"), 2)"
 ---
-**`/llm proofread`** — проверено файлов: 2, замечаний: 4.
+**`/llm proofread`** — files checked: 2, findings: 4.
 
-В статье много пунктуационных ошибок и раздельного написания
-терминов с аббревиатурами.
+The post has plenty of punctuation problems and inconsistent
+spelling of acronym-based terms.
 
-**Вне изменённых строк (1)** — привязать к строкам нельзя, поэтому здесь:
+**Outside the changed lines (1)** — these cannot be anchored to a line, so they are listed here:
 
 - `posts/dns.md:420` _terminology_ — «MacOS» → «macOS»
 
-**Про файлы вне области скилла (1)**:
+**About files outside the skill's scope (1)**:
 
-- `astro.config.ts:10` _other_ — Файл вне области скилла
+- `astro.config.ts:10` _other_ — This file is outside the skill's scope
 
-Ещё 5 замечаний не показаны: сработал лимит на число комментариев.
+5 more findings are not shown: the comment limit kicked in.
 
 
-<sub>скилл `proofread` · job `1a2b3c4d`</sub>
+<sub>skill `proofread` · job `1a2b3c4d`</sub>

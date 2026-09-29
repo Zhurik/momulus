@@ -1,24 +1,23 @@
 ---
 source: crates/github/src/publisher.rs
-assertion_line: 343
 expression: request
 ---
 {
   "commit_id": "abc1234def5678",
-  "body": "Нашёл две проблемы.",
+  "body": "Found two problems.",
   "event": "COMMENT",
   "comments": [
     {
       "path": "posts/dns.md",
       "line": 18,
       "side": "RIGHT",
-      "body": "**typo**: Тавтология: «красивое красивое»\n\n```suggestion\nкрасивое доменное имя\n```"
+      "body": "**typo**: Repetition: \"a nice nice domain\"\n\n```suggestion\na nice domain name\n```"
     },
     {
       "path": "posts/dns.md",
       "line": 18,
       "side": "RIGHT",
-      "body": "**typo**: Тавтология: «красивое красивое»"
+      "body": "**typo**: Repetition: \"a nice nice domain\""
     }
   ]
 }

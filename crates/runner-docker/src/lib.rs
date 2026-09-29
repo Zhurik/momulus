@@ -1,4 +1,4 @@
-//! Runner: единственный LLM-шаг запускается как контейнер с pi.
+//! Runner: the single LLM step runs as a container with pi inside.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -13,20 +13,20 @@ use bollard::query_parameters::{
 use futures::StreamExt;
 use momulus_core::{Error, Mount, ProviderApi, Redactor, Result, RunResult, RunSpec, Runner};
 
-/// Куда монтируется рабочая копия.
+/// Where the working copy is mounted.
 pub const WORK_MOUNT: &str = "/work";
-/// Куда монтируется каталог скиллов.
+/// Where the skills directory is mounted.
 pub const SKILLS_MOUNT: &str = "/skills";
-/// Куда контейнер пишет артефакты.
+/// Where the container writes its artifacts.
 pub const OUT_MOUNT: &str = "/out";
-/// Подкаталог /out, в который кладём models.json для pi.
+/// Subdirectory of /out where pi's models.json is placed.
 const AGENT_DIR: &str = ".pi-agent";
 
-/// Запускает pi в докере через bollard.
+/// Runs pi in Docker through bollard.
 pub struct DockerRunner {
     docker: Docker,
     redactor: Redactor,
-    /// Пользователь контейнера ("1000:1000"); None — как в образе.
+    /// Container user ("1000:1000"); None means the image default.
     user: Option<String>,
 }
 
@@ -39,7 +39,7 @@ impl std::fmt::Debug for DockerRunner {
 }
 
 impl DockerRunner {
-    /// Подключается к демону: по адресу из конфига или по умолчанию.
+    /// Connects to the daemon: at the configured address or the default one.
     pub fn connect(host: Option<&str>, user: Option<String>, redactor: Redactor) -> Result<Self> {
         let docker = match host {
             Some(host) if !host.is_empty() => {
@@ -56,17 +56,17 @@ impl DockerRunner {
         })
     }
 
-    /// Проверяет, что образ с pi собран.
+    /// Checks that the image with pi has been built.
     pub async fn ensure_image(&self, image: &str) -> Result<()> {
         self.docker.inspect_image(image).await.map_err(|e| {
             Error::Runner(format!(
-                "образ {image} недоступен ({e}); собери его: just build-images"
+                "image {image} is unavailable ({e}); build it with: just build-images"
             ))
         })?;
         Ok(())
     }
 
-    /// Команда, которую получает контейнер.
+    /// The command handed to the container.
     fn command(spec: &RunSpec) -> Vec<String> {
         let mut cmd = vec![
             "pi".to_string(),
@@ -91,7 +91,7 @@ impl DockerRunner {
         }
         cmd.push("--skill".to_string());
         cmd.push(format!("{SKILLS_MOUNT}/{}", spec.skill));
-        // Конец опций: промпт может начинаться с чего угодно.
+        // End of options: the prompt may start with anything.
         cmd.push("--".to_string());
         cmd.push(spec.prompt.clone());
         cmd
@@ -123,7 +123,7 @@ impl DockerRunner {
         ]
     }
 
-    /// Кладёт models.json рядом с артефактами, если провайдеру нужен свой base URL.
+    /// Writes models.json next to the artifacts when the provider needs its own base URL.
     fn write_agent_config(spec: &RunSpec) -> Result<Option<String>> {
         let Some(config) = &spec.agent_config else {
             return Ok(None);
@@ -140,7 +140,7 @@ impl DockerRunner {
             .v(true)
             .build();
         if let Err(err) = self.docker.remove_container(id, Some(options)).await {
-            tracing::warn!(container = id, error = %err, "контейнер не удалён");
+            tracing::warn!(container = id, error = %err, "the container was not removed");
         }
     }
 }
@@ -159,7 +159,7 @@ impl Runner for DockerRunner {
             pids_limit: Some(512),
             cap_drop: Some(vec!["ALL".to_string()]),
             security_opt: Some(vec!["no-new-privileges".to_string()]),
-            // Сеть нужна: pi ходит в API провайдера.
+            // Networking is required: pi talks to the provider API.
             network_mode: Some("bridge".to_string()),
             auto_remove: Some(false),
             init: Some(true),
@@ -201,7 +201,7 @@ impl Runner for DockerRunner {
 }
 
 impl DockerRunner {
-    /// Запускает контейнер, собирает логи и ждёт завершения с таймаутом.
+    /// Starts the container, collects logs and waits for it with a timeout.
     async fn run_container(&self, id: &str, spec: &RunSpec) -> Result<RunResult> {
         self.docker
             .start_container(id, None::<StartContainerOptions>)
@@ -248,7 +248,7 @@ impl DockerRunner {
         let timed_out = match waited {
             Ok(_) => false,
             Err(_) => {
-                tracing::warn!(container = id, "таймаут, убиваем контейнер");
+                tracing::warn!(container = id, "timed out, killing the container");
                 let options = KillContainerOptionsBuilder::default()
                     .signal("SIGKILL")
                     .build();
@@ -258,7 +258,7 @@ impl DockerRunner {
         };
 
         let exit_code = match waited {
-            // bollard отдаёт ненулевой код как ошибку — достаём его оттуда.
+            // bollard reports a non-zero code as an error — dig it out of there.
             Ok(Some(Ok(response))) => response.status_code,
             Ok(Some(Err(bollard::errors::Error::DockerContainerWaitError { code, .. }))) => code,
             Ok(Some(Err(err))) => {
@@ -272,7 +272,7 @@ impl DockerRunner {
 
         let (stdout, stderr) = logs_task
             .await
-            .map_err(|e| Error::Runner(format!("сбор логов: {e}")))?;
+            .map_err(|e| Error::Runner(format!("log collection: {e}")))?;
 
         Ok(RunResult {
             exit_code,
@@ -283,10 +283,10 @@ impl DockerRunner {
     }
 }
 
-/// Генерирует `models.json` для pi: описание провайдера, которого нет среди
-/// встроенных (например OpenAI-совместимый шлюз), плюс список его моделей.
+/// Generates pi's `models.json`: a description of a provider that is not built
+/// into pi (an OpenAI-compatible gateway, say) plus its model list.
 ///
-/// Ключ в файл не попадает: pi подставит его из переменной окружения.
+/// The key never reaches the file: pi substitutes it from the environment.
 pub fn models_json(
     provider: &str,
     base_url: &str,
@@ -295,7 +295,7 @@ pub fn models_json(
     models: &[&str],
 ) -> Result<String> {
     if base_url.is_empty() {
-        return Err(Error::Config("base URL пустой".into()));
+        return Err(Error::Config("base URL is empty".into()));
     }
     let mut spec = serde_json::Map::new();
     spec.insert("baseUrl".into(), serde_json::json!(base_url));
@@ -321,11 +321,11 @@ pub fn models_json(
     serde_json::to_string_pretty(&value).map_err(|e| Error::Internal(e.to_string()))
 }
 
-/// Проверяет, что путь абсолютный: относительные пути Docker трактует как имена томов.
+/// Checks that the path is absolute: Docker treats relative paths as volume names.
 pub fn require_absolute(path: &Path, what: &str) -> Result<()> {
     if !path.is_absolute() {
         return Err(Error::Runner(format!(
-            "{what} должен быть абсолютным путём, получен {}",
+            "{what} must be an absolute path, got {}",
             path.display()
         )));
     }
@@ -421,10 +421,10 @@ mod tests {
         let env = DockerRunner::env(&spec(), None);
         assert!(env.contains(&"ANTHROPIC_API_KEY=sk-ant-secret".to_string()));
         assert!(env.contains(&"PI_TELEMETRY=0".to_string()));
-        // Никаких токенов платформы в контейнере быть не должно.
+        // No platform tokens may end up inside the container.
         assert!(
             !env.iter().any(|e| e.contains("GITHUB")),
-            "в контейнер не передаём GitHub-токен: {env:?}"
+            "the GitHub token must not reach the container: {env:?}"
         );
     }
 
@@ -437,21 +437,24 @@ mod tests {
     #[test]
     fn models_json_describes_an_openai_compatible_provider() {
         let json = models_json(
-            "cloudru",
-            "https://foundation-models.api.cloud.ru/v1",
-            "CLOUDRU_API_KEY",
+            "openrouter",
+            "https://openrouter.ai/api/v1",
+            "OPENROUTER_API_KEY",
             Some(ProviderApi::OpenaiCompletions),
-            &["zai-org/GLM-5.1"],
+            &["some-vendor/some-model"],
         )
         .unwrap();
         assert!(
-            json.contains("\"baseUrl\": \"https://foundation-models.api.cloud.ru/v1\""),
+            json.contains("\"baseUrl\": \"https://openrouter.ai/api/v1\""),
             "{json}"
         );
         assert!(json.contains("\"api\": \"openai-completions\""), "{json}");
-        assert!(json.contains("\"id\": \"zai-org/GLM-5.1\""), "{json}");
-        // Ключ подставляет pi из окружения: в файле только имя переменной.
-        assert!(json.contains("$CLOUDRU_API_KEY"), "{json}");
+        assert!(
+            json.contains("\"id\": \"some-vendor/some-model\""),
+            "{json}"
+        );
+        // pi substitutes the key from the environment: the file only names the variable.
+        assert!(json.contains("$OPENROUTER_API_KEY"), "{json}");
     }
 
     #[test]
@@ -472,7 +475,7 @@ mod tests {
 
     #[test]
     fn models_json_requires_base_url() {
-        assert!(models_json("cloudru", "", "K", None, &[]).is_err());
+        assert!(models_json("openrouter", "", "K", None, &[]).is_err());
     }
 
     #[test]

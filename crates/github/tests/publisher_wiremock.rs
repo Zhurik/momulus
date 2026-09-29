@@ -1,4 +1,4 @@
-//! Publisher против фейкового GitHub API и локального bare-remote.
+//! Publisher against a fake GitHub API and a local bare remote.
 
 use std::path::Path;
 use std::process::Command as StdCommand;
@@ -58,7 +58,7 @@ fn finding(line: u32, suggestion: Option<&str>) -> Finding {
         path: "posts/dns.md".into(),
         line,
         severity: Severity::Typo,
-        body: "опечатка".into(),
+        body: "a typo".into(),
         suggestion: suggestion.map(str::to_string),
     }
 }
@@ -96,8 +96,8 @@ async fn posts_review_with_inline_comments() {
     publisher(&server)
         .post_review(
             &pr("https://github.com/acme/blog.git", "acme/blog"),
-            &[finding(18, Some("исправленная строка")), finding(20, None)],
-            "Нашёл две проблемы.",
+            &[finding(18, Some("the fixed line")), finding(20, None)],
+            "Found two problems.",
         )
         .await
         .unwrap();
@@ -106,7 +106,7 @@ async fn posts_review_with_inline_comments() {
     let body: serde_json::Value = serde_json::from_slice(&request.body).unwrap();
     assert_eq!(body["event"], "COMMENT");
     assert_eq!(body["commit_id"], "abc1234def5678");
-    assert_eq!(body["body"], "Нашёл две проблемы.");
+    assert_eq!(body["body"], "Found two problems.");
     let comments = body["comments"].as_array().unwrap();
     assert_eq!(comments.len(), 2);
     assert_eq!(comments[0]["path"], "posts/dns.md");
@@ -116,7 +116,7 @@ async fn posts_review_with_inline_comments() {
         comments[0]["body"]
             .as_str()
             .unwrap()
-            .contains("```suggestion\nисправленная строка\n```"),
+            .contains("```suggestion\nthe fixed line\n```"),
         "{}",
         comments[0]["body"]
     );
@@ -137,7 +137,7 @@ async fn review_without_findings_is_a_plain_comment_review() {
         .post_review(
             &pr("https://github.com/acme/blog.git", "acme/blog"),
             &[],
-            "Замечаний нет.",
+            "No findings.",
         )
         .await
         .unwrap();
@@ -208,7 +208,7 @@ async fn comment_is_posted_to_the_pull_request() {
     publisher(&server)
         .comment(
             &pr("https://github.com/acme/blog.git", "acme/blog"),
-            "нечего делать",
+            "nothing to do",
         )
         .await
         .unwrap();
@@ -237,7 +237,7 @@ async fn rate_limited_review_is_retried() {
         .post_review(
             &pr("https://github.com/acme/blog.git", "acme/blog"),
             &[],
-            "итог",
+            "wrap-up",
         )
         .await
         .unwrap();
@@ -259,22 +259,22 @@ async fn permanent_error_is_not_retried() {
         .post_review(
             &pr("https://github.com/acme/blog.git", "acme/blog"),
             &[],
-            "итог",
+            "wrap-up",
         )
         .await
         .unwrap_err();
     assert!(!err.is_transient(), "{err:?}");
 }
 
-/// Готовит bare-remote и рабочую копию с изменением.
+/// Prepares a bare remote and a working copy holding a change.
 fn patch_fixture(tmp: &Path) -> (String, Patch) {
     let origin = tmp.join("origin.git");
     let seed = tmp.join("seed");
     std::fs::create_dir_all(&seed).unwrap();
     git(&seed, &["init", "--quiet", "--initial-branch=main"]);
-    std::fs::write(seed.join("hello.mdx"), "# Привет\n").unwrap();
+    std::fs::write(seed.join("hello.mdx"), "# Hello\n").unwrap();
     git(&seed, &["add", "."]);
-    git(&seed, &["commit", "--quiet", "-m", "начало"]);
+    git(&seed, &["commit", "--quiet", "-m", "initial"]);
     git(&seed, &["branch", "feature"]);
     git(
         &seed,
@@ -298,9 +298,9 @@ fn patch_fixture(tmp: &Path) -> (String, Patch) {
         Patch {
             worktree: work,
             branch: "llm/translate-en-42".into(),
-            commit_message: "momulus: перевод".into(),
-            title: "momulus: translate для #42".into(),
-            body: "тело PR".into(),
+            commit_message: "momulus: translation".into(),
+            title: "momulus: translate for #42".into(),
+            body: "PR body".into(),
             files: vec!["hello.en.mdx".into()],
         },
     )
@@ -328,7 +328,7 @@ async fn pushes_branch_and_opens_pull_request() {
         .unwrap();
     assert_eq!(url.as_str(), "https://github.com/acme/blog/pull/43");
 
-    // Ветка появилась в bare-remote, и в ней есть наш файл.
+    // The branch showed up in the bare remote and carries our file.
     let branches = git(Path::new(&origin), &["branch", "--list"]);
     assert!(branches.contains("llm/translate-en-42"), "{branches}");
     let files = git(
@@ -337,26 +337,26 @@ async fn pushes_branch_and_opens_pull_request() {
     );
     assert!(files.contains("hello.en.mdx"), "{files}");
 
-    // Автор коммита — бот из конфига.
+    // The commit author is the bot from the config.
     let author = git(
         Path::new(&origin),
         &["log", "-1", "--format=%an <%ae>", "llm/translate-en-42"],
     );
     assert_eq!(author, "momulus <momulus@users.noreply.github.com>");
 
-    // База нового PR — head-ветка исходного.
+    // The new PR's base is the head branch of the original one.
     let request = server.received_requests().await.unwrap().pop().unwrap();
     let body: serde_json::Value = serde_json::from_slice(&request.body).unwrap();
     assert_eq!(body["base"], "feature");
     assert_eq!(body["head"], "llm/translate-en-42");
-    assert_eq!(body["title"], "momulus: translate для #42");
+    assert_eq!(body["title"], "momulus: translate for #42");
 }
 
 #[tokio::test]
 async fn branch_collision_gets_a_sha_suffix() {
     let tmp = tempfile::tempdir().unwrap();
     let (origin, patch) = patch_fixture(tmp.path());
-    // Занимаем желаемое имя ветки заранее.
+    // Take the desired branch name in advance.
     git(
         Path::new(&origin),
         &["branch", "llm/translate-en-42", "main"],
@@ -380,7 +380,7 @@ async fn branch_collision_gets_a_sha_suffix() {
     let branches = git(Path::new(&origin), &["branch", "--list"]);
     assert!(
         branches.contains("llm/translate-en-42-abc1234"),
-        "к имени добавлен short SHA: {branches}"
+        "a short SHA was appended to the name: {branches}"
     );
 
     let request = server.received_requests().await.unwrap().pop().unwrap();
@@ -399,10 +399,10 @@ async fn fork_pull_request_is_rejected_before_any_git_work() {
         .await
         .unwrap_err();
 
-    assert!(err.to_string().contains("форка"), "{err}");
+    assert!(err.to_string().contains("fork"), "{err}");
     assert!(!err.is_transient());
     assert!(
         server.received_requests().await.unwrap().is_empty(),
-        "к API не обращались"
+        "the API was never called"
     );
 }

@@ -1,17 +1,17 @@
-//! Перевод ошибок octocrab в ошибки ядра с правильной классификацией.
+//! Translating octocrab errors into core errors with the right classification.
 
 use momulus_core::Error;
 
-/// Превращает ошибку octocrab в ошибку ядра.
+/// Turns an octocrab error into a core error.
 ///
-/// Важно сохранить деление на транзиентные и постоянные: от него зависит,
-/// будет ли джоба повторена.
+/// Preserving the transient/permanent split matters: it decides whether the job
+/// gets retried.
 pub fn from_octocrab(err: octocrab::Error) -> Error {
     match &err {
         octocrab::Error::GitHub { source, .. } => {
             let status = source.status_code.as_u16();
             let message = source.message.clone();
-            // 403 у GitHub бывает и «нет прав», и «превышен лимит».
+            // On GitHub a 403 can mean either "no permission" or "rate limited".
             if status == 403 && looks_like_rate_limit(&message) {
                 return Error::RateLimited { retry_after: None };
             }

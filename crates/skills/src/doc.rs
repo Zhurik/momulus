@@ -1,18 +1,18 @@
-//! Разбор `SKILL.md` — инструкции для pi в формате Agent Skills.
+//! Parsing `SKILL.md` — instructions for pi in the Agent Skills format.
 
 use crate::error::{SkillError, SkillResult};
 
-/// Frontmatter и тело SKILL.md.
+/// Frontmatter and body of SKILL.md.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SkillDoc {
     pub name: String,
     pub description: String,
-    /// Текст после frontmatter.
+    /// The text after the frontmatter.
     pub body: String,
 }
 
 impl SkillDoc {
-    /// Разбирает файл: YAML-frontmatter с `name` и `description`, дальше — текст.
+    /// Parses the file: YAML frontmatter with `name` and `description`, then the text.
     pub fn parse(skill: &str, text: &str) -> SkillResult<SkillDoc> {
         let fail = |message: &str| SkillError::Doc {
             skill: skill.to_string(),
@@ -23,10 +23,10 @@ impl SkillDoc {
         let rest = text
             .strip_prefix("---\n")
             .or_else(|| text.strip_prefix("---\r\n"))
-            .ok_or_else(|| fail("нет frontmatter: файл должен начинаться со строки ---"))?;
+            .ok_or_else(|| fail("no frontmatter: the file must start with a --- line"))?;
 
-        let (frontmatter, body) =
-            split_frontmatter(rest).ok_or_else(|| fail("frontmatter не закрыт строкой ---"))?;
+        let (frontmatter, body) = split_frontmatter(rest)
+            .ok_or_else(|| fail("frontmatter is not closed by a --- line"))?;
 
         let mut name = None;
         let mut description = None;
@@ -36,27 +36,28 @@ impl SkillDoc {
                 continue;
             }
             let Some((key, value)) = line.split_once(':') else {
-                return Err(fail(&format!("непонятная строка frontmatter: {line:?}")));
+                return Err(fail(&format!("unparseable frontmatter line: {line:?}")));
             };
             let value = unquote(value.trim());
             match key.trim() {
                 "name" => name = Some(value),
                 "description" => description = Some(value),
-                _ => {} // Остальные ключи frontmatter нас не касаются.
+                _ => {} // Other frontmatter keys are none of our business.
             }
         }
 
-        let name = name.ok_or_else(|| fail("во frontmatter нет поля name"))?;
-        let description = description.ok_or_else(|| fail("во frontmatter нет поля description"))?;
+        let name = name.ok_or_else(|| fail("frontmatter has no name field"))?;
+        let description =
+            description.ok_or_else(|| fail("frontmatter has no description field"))?;
         if name.is_empty() {
-            return Err(fail("поле name пустое"));
+            return Err(fail("the name field is empty"));
         }
         if description.is_empty() {
-            return Err(fail("поле description пустое"));
+            return Err(fail("the description field is empty"));
         }
         if name != skill {
             return Err(fail(&format!(
-                "name = {name:?} не совпадает с именем каталога {skill:?}"
+                "name = {name:?} does not match the directory name {skill:?}"
             )));
         }
 
@@ -68,7 +69,7 @@ impl SkillDoc {
     }
 }
 
-/// Делит текст после открывающего `---` на frontmatter и тело.
+/// Splits the text after the opening `---` into frontmatter and body.
 fn split_frontmatter(text: &str) -> Option<(&str, &str)> {
     let mut offset = 0;
     for line in text.split_inclusive('\n') {
@@ -94,13 +95,13 @@ fn unquote(value: &str) -> String {
 mod tests {
     use super::*;
 
-    const DOC: &str = "---\nname: proofread\ndescription: Вычитка MDX-статей\n---\n\n# Proofread\n\nИнструкции.\n";
+    const DOC: &str = "---\nname: proofread\ndescription: Proofreading MDX posts\n---\n\n# Proofread\n\nInstructions.\n";
 
     #[test]
     fn parses_frontmatter_and_body() {
         let doc = SkillDoc::parse("proofread", DOC).unwrap();
         assert_eq!(doc.name, "proofread");
-        assert_eq!(doc.description, "Вычитка MDX-статей");
+        assert_eq!(doc.description, "Proofreading MDX posts");
         assert!(doc.body.contains("# Proofread"));
     }
 
@@ -108,23 +109,23 @@ mod tests {
     fn accepts_quoted_values_and_extra_keys() {
         let doc = SkillDoc::parse(
             "review",
-            "---\nname: \"review\"\nlicense: MIT\ndescription: 'Ревью кода'\n---\nтело\n",
+            "---\nname: \"review\"\nlicense: MIT\ndescription: 'Code review'\n---\nbody\n",
         )
         .unwrap();
         assert_eq!(doc.name, "review");
-        assert_eq!(doc.description, "Ревью кода");
+        assert_eq!(doc.description, "Code review");
     }
 
     #[test]
     fn requires_frontmatter() {
-        let err = SkillDoc::parse("x", "# Заголовок\n").unwrap_err();
+        let err = SkillDoc::parse("x", "# Heading\n").unwrap_err();
         assert!(err.to_string().contains("frontmatter"), "{err}");
     }
 
     #[test]
     fn requires_closing_delimiter() {
         let err = SkillDoc::parse("x", "---\nname: x\ndescription: y\n").unwrap_err();
-        assert!(err.to_string().contains("не закрыт"), "{err}");
+        assert!(err.to_string().contains("not closed"), "{err}");
     }
 
     #[test]
@@ -139,14 +140,14 @@ mod tests {
     fn name_must_match_directory() {
         let err =
             SkillDoc::parse("proofread", "---\nname: other\ndescription: y\n---\n").unwrap_err();
-        assert!(err.to_string().contains("не совпадает"), "{err}");
+        assert!(err.to_string().contains("does not match"), "{err}");
     }
 
     #[test]
     fn handles_crlf_and_bom() {
         let doc = SkillDoc::parse(
             "x",
-            "\u{feff}---\r\nname: x\r\ndescription: y\r\n---\r\nтело\r\n",
+            "\u{feff}---\r\nname: x\r\ndescription: y\r\n---\r\nbody\r\n",
         )
         .unwrap();
         assert_eq!(doc.description, "y");

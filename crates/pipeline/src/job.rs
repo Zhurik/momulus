@@ -1,4 +1,4 @@
-//! Оркестрация одной джобы: рабочая копия → скилл → runner → валидация → публикация.
+//! Orchestration of one job: working copy → skill → runner → validation → publication.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -18,22 +18,22 @@ use crate::steps::{collect_patch, run_patch, run_review};
 use crate::validate::prepare_review;
 use momulus_skills::Mode;
 
-/// Настройки запуска, одинаковые для всех джоб.
+/// Run settings shared by every job.
 #[derive(Debug, Clone)]
 pub struct PipelineConfig {
-    /// Каталог, в котором создаются рабочие копии.
+    /// Directory where working copies are created.
     pub work_dir: PathBuf,
-    /// Куда пишем логи агента.
+    /// Where the agent logs are written.
     pub logs_dir: PathBuf,
-    /// Каталог скиллов, монтируется в контейнер.
+    /// Skills directory, mounted into the container.
     pub skills_dir: PathBuf,
     pub provider: String,
     pub model: String,
-    /// Протокол провайдера, если его нужно описать в models.json.
+    /// Provider protocol, when it has to be described in models.json.
     pub api: Option<ProviderApi>,
-    /// Имя переменной окружения с ключом провайдера.
+    /// Name of the environment variable holding the provider key.
     pub api_key_env: String,
-    /// Сам ключ; в логи не попадает.
+    /// The key itself; it never reaches the logs.
     pub api_key: Option<String>,
     pub base_url: Option<String>,
     pub image: String,
@@ -42,29 +42,29 @@ pub struct PipelineConfig {
     pub limits: Limits,
 }
 
-/// Чем закончилась джоба.
+/// How the job ended.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Outcome {
-    /// Ревью опубликовано.
+    /// The review was published.
     Review { findings: usize },
-    /// Патч запушен, PR открыт.
+    /// The patch was pushed and a PR was opened.
     Patch { url: Url },
-    /// Под фильтр скилла не попало ни одного файла.
+    /// No file matched the skill's filter.
     NothingToDo,
-    /// Скилл ничего не изменил.
+    /// The skill changed nothing.
     NoChanges,
-    /// Команда отклонена по понятной причине (форк, слишком большой вход).
+    /// The command was refused for a clear reason (a fork, an oversized input).
     Rejected { reason: String },
 }
 
-/// Результат выполнения джобы вместе с путём к логу.
+/// The job's outcome together with the path to its log.
 #[derive(Debug, Clone)]
 pub struct JobResult {
     pub outcome: Outcome,
     pub log_path: Option<PathBuf>,
 }
 
-/// Пайплайн одной джобы.
+/// The pipeline for a single job.
 pub struct Pipeline {
     registry: Arc<SharedRegistry>,
     runner: Arc<dyn Runner>,
@@ -101,13 +101,13 @@ impl Pipeline {
         &self.config
     }
 
-    /// Выполняет джобу от начала до публикации результата.
+    /// Runs the job from start to published result.
     pub async fn execute(&self, job: &Job) -> Result<JobResult> {
         let skill = self
             .registry
             .skill(&job.command.skill)
             .await
-            .ok_or_else(|| Error::Skill(format!("скилл \"{}\" не найден", job.command.skill)))?;
+            .ok_or_else(|| Error::Skill(format!("skill \"{}\" not found", job.command.skill)))?;
 
         let args = skill
             .contract
@@ -119,9 +119,9 @@ impl Pipeline {
             command: &command_line,
         };
 
-        // Патч в форк не запушить — говорим сразу, не тратя вызов модели.
+        // We cannot push into a fork — say so right away, before calling the model.
         if skill.contract.mode == Mode::Patch && job.pr.is_fork() {
-            let reason = format!("PR из форка {}", job.pr.head_repo);
+            let reason = format!("the PR comes from the fork {}", job.pr.head_repo);
             self.publisher
                 .comment(
                     &job.pr,
@@ -134,7 +134,7 @@ impl Pipeline {
             });
         }
 
-        // Рабочая копия на head-коммите PR.
+        // A working copy at the PR head commit.
         let token = self.access.git_token(&job.pr).await?;
         let bare = self
             .cache
@@ -149,7 +149,7 @@ impl Pipeline {
         let dest = self.config.work_dir.join(job.id.to_string());
         let worktree = self.cache.worktree(&bare, &dest, &job.pr.head_sha).await?;
 
-        // Файлы PR под фильтром скилла.
+        // The PR files that match the skill's filter.
         let diff_text = self
             .cache
             .pr_diff(&bare, &self.access.base_rev(&job.pr), &job.pr.head_sha)
@@ -170,7 +170,7 @@ impl Pipeline {
             });
         }
 
-        // Слишком большой вход — отказ без вызова модели.
+        // Oversized input — refuse without calling the model.
         if let Err(err) = check_input(
             diff_text.len() as u64,
             &measure_files(worktree.path(), &files),
@@ -246,7 +246,7 @@ impl Pipeline {
                     branch,
                     render::pr_title(&skill.name, job.pr.number, &args),
                     body,
-                    format!("momulus: {} для #{}", skill.name, job.pr.number),
+                    format!("momulus: {} for #{}", skill.name, job.pr.number),
                 )
                 .await?;
 
@@ -261,7 +261,7 @@ impl Pipeline {
                         Outcome::NoChanges
                     }
                     Some(mut patch) => {
-                        // Список файлов известен только после сборки патча.
+                        // The file list is only known once the patch is collected.
                         patch.body = render::pr_body(
                             &job_ctx,
                             job.pr.number,
@@ -270,7 +270,7 @@ impl Pipeline {
                         );
                         let url = self.publisher.push_and_open_pr(&job.pr, &patch).await?;
                         self.publisher
-                            .comment(&job.pr, &format!("Изменения в отдельном PR: {url}"))
+                            .comment(&job.pr, &format!("The changes are in a separate PR: {url}"))
                             .await?;
                         Outcome::Patch { url }
                     }
@@ -278,7 +278,7 @@ impl Pipeline {
             }
         };
 
-        // Рабочая копия удаляется здесь, явно, чтобы поймать ошибки очистки.
+        // The working copy is removed here, explicitly, so cleanup errors surface.
         worktree.cleanup().await?;
         let _ = std::fs::remove_dir_all(self.config.work_dir.join(format!("{}-out", job.id)));
 
@@ -288,12 +288,12 @@ impl Pipeline {
         })
     }
 
-    /// Отмечает джобу на платформе (реакция на комментарий-команду).
+    /// Marks the job on the platform (a reaction on the command comment).
     pub async fn ack(&self, job: &Job, state: AckState) -> Result<()> {
         self.publisher.ack(&job.job_ref(), state).await
     }
 
-    /// Сообщает об ошибке в PR понятным текстом, без стектрейсов и секретов.
+    /// Reports an error to the PR in plain words, with no stack traces or secrets.
     pub async fn report_error(&self, job: &Job, error: &Error) -> Result<()> {
         let command_line = job.command.to_command_line();
         let ctx = JobContext {
@@ -342,8 +342,8 @@ impl Pipeline {
             skills_dir: self.config.skills_dir.clone(),
             out_dir,
             mount: match skill.contract.mode {
-                // В review-режиме рабочая копия только для чтения: содержимое PR —
-                // недоверенный ввод.
+                // In review mode the working copy is read-only: PR content is
+                // untrusted input.
                 Mode::Review => Mount::ReadOnly,
                 Mode::Patch => Mount::ReadWrite,
             },
@@ -361,8 +361,8 @@ impl Pipeline {
     }
 }
 
-/// Описание провайдера для pi (то же, что делает runner-docker, но без
-/// зависимости пайплайна от докера).
+/// Provider description for pi (the same thing runner-docker does, but without
+/// making the pipeline depend on Docker).
 fn models_json(
     provider: &str,
     base_url: &str,

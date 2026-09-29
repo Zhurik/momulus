@@ -1,4 +1,4 @@
-//! Описание аргументов командной строки.
+//! Command-line argument definitions.
 
 use std::path::PathBuf;
 
@@ -8,10 +8,10 @@ use clap::{Args as ClapArgs, Parser, Subcommand, ValueEnum};
 #[command(
     name = "momulus",
     version,
-    about = "Оркестратор LLM-скиллов для pull request'ов"
+    about = "An orchestrator for LLM skills on pull requests"
 )]
 pub struct Cli {
-    /// Путь к конфигу.
+    /// Path to the config file.
     #[arg(
         long,
         short,
@@ -21,15 +21,15 @@ pub struct Cli {
     )]
     pub config: PathBuf,
 
-    /// Каталог со скиллами; перебивает значение из конфига.
+    /// Skills directory; overrides the value from the config.
     #[arg(long, global = true)]
     pub skills_dir: Option<PathBuf>,
 
-    /// Формат логов.
+    /// Log format.
     #[arg(long, global = true, value_enum, default_value_t = LogFormat::Text)]
     pub log_format: LogFormat,
 
-    /// Уровень логов (перебивается RUST_LOG).
+    /// Log level (RUST_LOG takes precedence).
     #[arg(long, global = true, default_value = "info")]
     pub log_level: String,
 
@@ -45,17 +45,17 @@ pub enum LogFormat {
 
 #[derive(Debug, Subcommand)]
 pub enum Commands {
-    /// Основной режим: опрос платформы и выполнение команд.
+    /// The main mode: poll the platform and execute commands.
     Serve {
-        /// Всё выполнить, ничего не публиковать.
+        /// Do everything, publish nothing.
         #[arg(long)]
         dry_run: bool,
     },
 
-    /// Прогон одного скилла на локальной папке, без платформы.
+    /// Run a single skill on a local directory, without any platform.
     Run(RunArgs),
 
-    /// Работа с реестром скиллов.
+    /// Work with the skill registry.
     Skills {
         #[command(subcommand)]
         command: SkillsCommand,
@@ -64,45 +64,45 @@ pub enum Commands {
 
 #[derive(Debug, ClapArgs)]
 pub struct RunArgs {
-    /// Локальный git-репозиторий, на котором прогоняем скилл.
+    /// Local git repository to run the skill against.
     #[arg(long)]
     pub repo_path: PathBuf,
 
-    /// Имя скилла из реестра.
+    /// Skill name from the registry.
     #[arg(long)]
     pub skill: String,
 
-    /// Файлы, которые считаем изменёнными (через запятую). Пусто — все под фильтром скилла.
+    /// Files to treat as changed (comma-separated). Empty means everything matching the skill filter.
     #[arg(long, value_delimiter = ',')]
     pub files: Vec<String>,
 
-    /// Аргумент скилла в форме k=v; можно повторять.
+    /// Skill argument as k=v; may be repeated.
     #[arg(long = "arg", value_parser = parse_kv)]
     pub args: Vec<(String, String)>,
 
-    /// Куда класть артефакты (по умолчанию ./out).
+    /// Where to put the artifacts (./out by default).
     #[arg(long, default_value = "out")]
     pub out: PathBuf,
 
-    /// Вместо docker взять готовые артефакты из каталога (для тестов).
+    /// Take ready-made artifacts from a directory instead of using docker (for tests).
     #[arg(long, hide = true)]
     pub fake_runner: Option<PathBuf>,
 }
 
 #[derive(Debug, Subcommand)]
 pub enum SkillsCommand {
-    /// Показать доступные скиллы.
+    /// List the available skills.
     List,
-    /// Проверить контракты скиллов.
+    /// Validate the skill contracts.
     Validate,
 }
 
 fn parse_kv(raw: &str) -> Result<(String, String), String> {
     let (key, value) = raw
         .split_once('=')
-        .ok_or_else(|| format!("ожидается k=v, получено {raw:?}"))?;
+        .ok_or_else(|| format!("expected k=v, got {raw:?}"))?;
     if key.is_empty() {
-        return Err(format!("пустое имя аргумента в {raw:?}"));
+        return Err(format!("empty argument name in {raw:?}"));
     }
     Ok((key.to_string(), value.to_string()))
 }

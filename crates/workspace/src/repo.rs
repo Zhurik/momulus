@@ -1,4 +1,4 @@
-//! Кэш bare-клонов: `data/repos/<owner>/<repo>.git`.
+//! Bare clone cache: `data/repos/<owner>/<repo>.git`.
 
 use std::path::{Path, PathBuf};
 
@@ -8,7 +8,7 @@ use crate::diff::DiffIndex;
 use crate::git::Git;
 use crate::worktree::Worktree;
 
-/// Кэш репозиториев на диске.
+/// On-disk repository cache.
 #[derive(Debug, Clone)]
 pub struct RepoCache {
     root: PathBuf,
@@ -31,15 +31,15 @@ impl RepoCache {
         &self.root
     }
 
-    /// Путь bare-клона репозитория.
+    /// Path of a repository's bare clone.
     pub fn bare_path(&self, owner: &str, repo: &str) -> PathBuf {
         self.root.join(owner).join(format!("{repo}.git"))
     }
 
-    /// Клонирует репозиторий, если его ещё нет, и подтягивает нужные ссылки.
+    /// Clones the repository when missing and fetches the required refs.
     ///
-    /// `refspecs` задаются вызывающим, потому что у разных платформ разные
-    /// схемы ссылок на PR (у GitHub это `refs/pull/<n>/head`).
+    /// `refspecs` come from the caller because platforms name their PR refs
+    /// differently (on GitHub it is `refs/pull/<n>/head`).
     pub async fn sync(
         &self,
         owner: &str,
@@ -51,7 +51,7 @@ impl RepoCache {
         let bare = self.bare_path(owner, repo);
         if !bare.join("HEAD").exists() {
             if bare.exists() {
-                // Остатки неудачного клона только мешают.
+                // Leftovers of a failed clone are only in the way.
                 std::fs::remove_dir_all(&bare)?;
             }
             if let Some(parent) = bare.parent() {
@@ -89,7 +89,7 @@ impl RepoCache {
         Ok(bare)
     }
 
-    /// Есть ли такой коммит в кэше.
+    /// Whether the cache contains this commit.
     pub async fn has_commit(&self, bare: &Path, sha: &str) -> Result<bool> {
         let result = self
             .git
@@ -102,7 +102,7 @@ impl RepoCache {
         }
     }
 
-    /// Diff PR: изменения head относительно точки ветвления от base.
+    /// PR diff: head changes relative to the merge base with the base branch.
     pub async fn pr_diff(&self, bare: &Path, base: &str, head: &str) -> Result<String> {
         let out = self
             .git
@@ -122,12 +122,12 @@ impl RepoCache {
         Ok(out.stdout)
     }
 
-    /// Разобранный diff PR.
+    /// The parsed PR diff.
     pub async fn pr_diff_index(&self, bare: &Path, base: &str, head: &str) -> Result<DiffIndex> {
         DiffIndex::parse(&self.pr_diff(bare, base, head).await?)
     }
 
-    /// Рабочая копия на head-коммите PR; удаляется вместе с возвращённым значением.
+    /// Working copy at the PR head commit; removed when the returned value is dropped.
     pub async fn worktree(&self, bare: &Path, dest: &Path, sha: &str) -> Result<Worktree> {
         Worktree::create(&self.git, bare, dest, sha).await
     }

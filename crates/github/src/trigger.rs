@@ -1,4 +1,4 @@
-//! Trigger: опрашивает GitHub и превращает команды в джобы.
+//! Trigger: polls GitHub and turns commands into jobs.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -20,20 +20,20 @@ use crate::models::{
     ReviewComment,
 };
 
-/// Имена потоков комментариев — они же ключи курсоров.
+/// Names of the comment streams — they double as cursor keys.
 pub const STREAM_ISSUE: &str = "issue_comments";
 pub const STREAM_REVIEW: &str = "review_comments";
 
-/// Сколько комментариев берём за один запрос.
+/// How many comments we fetch per request.
 const PER_PAGE: u8 = 100;
 
-/// Настройки опроса.
+/// Polling settings.
 #[derive(Debug, Clone)]
 pub struct TriggerConfig {
     pub poll_interval: Duration,
-    /// Кому разрешено запускать команды.
+    /// Who is allowed to issue commands.
     pub allowed_users: Vec<String>,
-    /// Белый список "owner/repo"; пусто — все репозитории установок.
+    /// Allowlist of "owner/repo"; empty means every repository of the installations.
     pub repos: Vec<String>,
 }
 
@@ -49,19 +49,19 @@ impl TriggerConfig {
     }
 }
 
-/// Откуда Trigger берёт клиентов и список репозиториев.
+/// Where the Trigger gets its clients and its repository list.
 pub enum ClientSource {
-    /// Обычный режим: все установки приложения.
+    /// The normal mode: every installation of the App.
     App(Arc<crate::AppAuth>),
-    /// Фиксированный клиент и заранее известные репозитории —
-    /// для одного репозитория и для тестов.
+    /// A fixed client and a known repository list — for a single repository
+    /// and for tests.
     Fixed {
         client: Octocrab,
         repos: Vec<String>,
     },
 }
 
-/// Репозиторий, который опрашиваем.
+/// A repository we poll.
 struct Target {
     client: Octocrab,
     owner: String,
@@ -78,7 +78,7 @@ impl Target {
     }
 }
 
-/// Реализация [`Trigger`] через периодический опрос REST API.
+/// [`Trigger`] implementation based on periodic REST API polling.
 pub struct GithubTrigger {
     config: TriggerConfig,
     source: ClientSource,
@@ -87,7 +87,7 @@ pub struct GithubTrigger {
     backoff: Backoff,
 }
 
-/// Параметры запроса списка комментариев.
+/// Query parameters for listing comments.
 #[derive(Debug, Serialize)]
 struct ListParams<'a> {
     sort: &'a str,
@@ -118,7 +118,7 @@ impl GithubTrigger {
         self
     }
 
-    /// Один проход опроса: возвращает найденные джобы.
+    /// One polling pass: returns the jobs it found.
     pub async fn poll_once(&self) -> Result<Vec<Job>> {
         let mut jobs = Vec::new();
         for target in self.targets().await? {
@@ -131,7 +131,7 @@ impl GithubTrigger {
         Ok(jobs)
     }
 
-    /// Репозитории, которые надо опросить.
+    /// The repositories to poll.
     async fn targets(&self) -> Result<Vec<Target>> {
         match &self.source {
             ClientSource::Fixed { client, repos } => Ok(repos
@@ -255,7 +255,7 @@ impl GithubTrigger {
         Ok(jobs)
     }
 
-    /// Запрос списка комментариев с курсором.
+    /// Requests a list of comments using the cursor.
     async fn list<T: serde::de::DeserializeOwned>(
         &self,
         target: &Target,
@@ -279,9 +279,9 @@ impl GithubTrigger {
             .await
     }
 
-    /// Разбирает комментарий и, если это годная команда, делает джобу.
+    /// Parses a comment and, when it is a usable command, produces a job.
     ///
-    /// Всё, что не команда или не от разрешённого пользователя, игнорируется молча.
+    /// Anything that is not a command, or comes from an unlisted user, is ignored silently.
     async fn handle_comment(
         &self,
         target: &Target,
@@ -292,17 +292,17 @@ impl GithubTrigger {
     ) -> Result<Option<Job>> {
         let parsed = match Command::parse(body) {
             Ok(command) => Ok(command),
-            // Не команда — молчим.
+            // Not a command — stay quiet.
             Err(CommandParseError::NotACommand) => return Ok(None),
             Err(err) => Err(err),
         };
 
         if !self.config.is_allowed_user(author) {
-            tracing::debug!(author, "команда от пользователя вне allowed_users");
+            tracing::debug!(author, "command from a user outside allowed_users");
             return Ok(None);
         }
 
-        // Один комментарий обрабатываем ровно один раз.
+        // A comment is handled exactly once.
         if !self.store.mark_seen(PLATFORM, comment.id).await? {
             return Ok(None);
         }
@@ -319,7 +319,7 @@ impl GithubTrigger {
             self.reply_help(
                 target,
                 pr_number,
-                &format!("неизвестный скилл \"{}\"", command.skill),
+                &format!("unknown skill \"{}\"", command.skill),
             )
             .await?;
             return Ok(None);
@@ -331,7 +331,7 @@ impl GithubTrigger {
                 target,
                 pr_number,
                 &format!(
-                    "Команда `{}` не выполнена: pull request уже закрыт.",
+                    "The command `{}` did not run: the pull request is already closed.",
                     command.to_command_line()
                 ),
             )
@@ -356,10 +356,10 @@ impl GithubTrigger {
             .await
     }
 
-    /// Отвечает подсказкой на непонятную команду.
+    /// Replies with help to a command it could not parse.
     async fn reply_help(&self, target: &Target, pr_number: u64, reason: &str) -> Result<()> {
         let body = format!(
-            "Не понял команду: {reason}\n\n{}",
+            "I could not parse that command: {reason}\n\n{}",
             self.catalog.help_text().await.trim_end()
         );
         self.reply(target, pr_number, &body).await
@@ -396,7 +396,7 @@ fn max_time(current: Option<DateTime<Utc>>, candidate: DateTime<Utc>) -> Option<
 #[async_trait::async_trait]
 impl Trigger for GithubTrigger {
     async fn run(&self, tx: mpsc::Sender<Job>, shutdown: CancellationToken) -> Result<()> {
-        // Считаем подряд идущие сбои, чтобы не молотить API в пустую.
+        // Count consecutive failures so we do not hammer the API for nothing.
         let mut failures: u32 = 0;
         loop {
             match self.poll_once().await {
@@ -404,7 +404,7 @@ impl Trigger for GithubTrigger {
                     failures = 0;
                     for job in jobs {
                         if tx.send(job).await.is_err() {
-                            tracing::info!("очередь закрыта, останавливаем опрос");
+                            tracing::info!("the queue is closed, stopping the poll loop");
                             return Ok(());
                         }
                     }
@@ -412,7 +412,7 @@ impl Trigger for GithubTrigger {
                 Err(Error::Cancelled) => return Ok(()),
                 Err(err) => {
                     failures = failures.saturating_add(1);
-                    tracing::warn!(error = %err, failures, "опрос не удался");
+                    tracing::warn!(error = %err, failures, "the poll failed");
                 }
             }
 

@@ -1,22 +1,22 @@
-//! Ошибки реестра скиллов.
+//! Skill registry errors.
 
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum SkillError {
-    #[error("скилл \"{skill}\": невалидный skill.toml: {message}")]
+    #[error("skill \"{skill}\": invalid skill.toml: {message}")]
     Contract { skill: String, message: String },
 
-    #[error("скилл \"{skill}\": невалидный SKILL.md: {message}")]
+    #[error("skill \"{skill}\": invalid SKILL.md: {message}")]
     Doc { skill: String, message: String },
 
-    #[error("скилл \"{skill}\": {message}")]
+    #[error("skill \"{skill}\": {message}")]
     Args { skill: String, message: String },
 
-    #[error("каталог скиллов {}: {message}", path.display())]
+    #[error("skills directory {}: {message}", path.display())]
     Registry { path: PathBuf, message: String },
 
-    #[error("неизвестный скилл \"{0}\"")]
+    #[error("unknown skill \"{0}\"")]
     Unknown(String),
 
     #[error("{0}")]

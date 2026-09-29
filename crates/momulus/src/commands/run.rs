@@ -1,4 +1,4 @@
-//! `momulus run` — прогон одного скилла на локальной папке, без платформы.
+//! `momulus run` — runs a single skill on a local directory, without a platform.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -16,7 +16,7 @@ use momulus_skills::{Mode, Registry, Skill};
 use crate::cli::{Cli, RunArgs};
 use crate::commands::skills::{load_config_or_default, resolve_skills_dir};
 
-/// Каталоги, которые не имеет смысла обходить в поисках файлов скилла.
+/// Directories not worth walking when looking for skill files.
 const SKIP_DIRS: [&str; 6] = [".git", "node_modules", "target", ".next", "dist", ".venv"];
 
 pub async fn run(cli: &Cli, args: &RunArgs) -> Result<()> {
@@ -27,13 +27,13 @@ pub async fn run(cli: &Cli, args: &RunArgs) -> Result<()> {
 
     let repo_path = absolute(&args.repo_path)?;
     if !repo_path.is_dir() {
-        bail!("{} — не каталог", repo_path.display());
+        bail!("{} is not a directory", repo_path.display());
     }
 
     let files = select_files(&repo_path, skill, &args.files, &config)?;
     if files.is_empty() {
         println!(
-            "нечего делать: под фильтр скилла {:?} не попал ни один файл",
+            "nothing to do: no file matched the skill filter {:?}",
             skill.contract.files
         );
         return Ok(());
@@ -58,7 +58,7 @@ pub async fn run(cli: &Cli, args: &RunArgs) -> Result<()> {
         },
     };
 
-    // Тот же лимит на размер входа, что и в джобах из PR.
+    // The same input size limit as for jobs coming from a PR.
     check_input(0, &measure_files(&repo_path, &files), &config.limits)?;
 
     let out_dir = absolute(&args.out)?;
@@ -76,7 +76,7 @@ pub async fn run(cli: &Cli, args: &RunArgs) -> Result<()> {
     )?;
 
     println!(
-        "скилл {} ({}), файлов: {}, каталог артефактов: {}",
+        "skill {} ({}), files: {}, artifact directory: {}",
         skill.name,
         skill.contract.mode,
         files.len(),
@@ -100,12 +100,12 @@ pub async fn run(cli: &Cli, args: &RunArgs) -> Result<()> {
             let result = prepare_review(
                 step.output,
                 &files,
-                // Локальный прогон не привязан к PR, diff'а нет.
+                // A local run is not tied to a PR, so there is no diff.
                 None,
                 skill.contract.max_comments(),
             );
             println!(
-                "\n--- ревью ---\n{}",
+                "\n--- review ---\n{}",
                 render::review_summary(&result, &job_ctx, files.len())
             );
             for finding in &result.inline {
@@ -117,11 +117,11 @@ pub async fn run(cli: &Cli, args: &RunArgs) -> Result<()> {
                     finding.body
                 );
                 if let Some(suggestion) = &finding.suggestion {
-                    println!("    предложение: {suggestion}");
+                    println!("    suggestion: {suggestion}");
                 }
             }
             println!(
-                "\nвсего замечаний: {} (inline {}, вне diff {}, чужие файлы {}), попыток: {}",
+                "\ntotal findings: {} (inline {}, outside the diff {}, other files {}), attempts: {}",
                 result.kept(),
                 result.inline.len(),
                 result.out_of_diff.len(),
@@ -137,28 +137,28 @@ pub async fn run(cli: &Cli, args: &RunArgs) -> Result<()> {
 
             match &step.summary {
                 Some(summary) => println!("\n--- summary.md ---\n{summary}"),
-                None => println!("\nскилл не оставил summary.md"),
+                None => println!("\nthe skill left no summary.md"),
             }
-            println!("изменения остались в рабочей копии — посмотри `git status`/`git diff`");
+            println!("the changes stayed in the working copy — check `git status`/`git diff`");
         }
     }
 
-    println!("лог: {}", log_path.display());
+    println!("log: {}", log_path.display());
     Ok(())
 }
 
-/// Разворачивает ошибку шага в anyhow, подсказывая, где искать лог.
+/// Turns a step error into anyhow, pointing at the log file.
 fn finish<T>(step: momulus_core::Result<T>, log_path: &Path) -> Result<T> {
-    step.map_err(|err| anyhow::anyhow!("{err} (лог: {})", log_path.display()))
+    step.map_err(|err| anyhow::anyhow!("{err} (log: {})", log_path.display()))
 }
 
-/// Печатает вывод агента по попыткам.
+/// Prints the agent output, attempt by attempt.
 fn print_runs(runs: &[momulus_core::RunResult]) {
     for (i, run) in runs.iter().enumerate() {
         if runs.len() > 1 {
-            println!("\n--- вывод агента, попытка {} ---", i + 1);
+            println!("\n--- agent output, attempt {} ---", i + 1);
         } else {
-            println!("\n--- вывод агента ---");
+            println!("\n--- agent output ---");
         }
         println!("{}", run.stdout.trim_end());
         if !run.stderr.trim().is_empty() {
@@ -167,7 +167,7 @@ fn print_runs(runs: &[momulus_core::RunResult]) {
     }
 }
 
-/// Восстанавливает команду в том виде, в каком её написал бы человек.
+/// Reconstructs the command the way a human would have written it.
 fn command_line(skill: &str, args: &BTreeMap<String, String>) -> String {
     let mut out = format!("/llm {skill}");
     for (key, value) in args {
@@ -176,7 +176,7 @@ fn command_line(skill: &str, args: &BTreeMap<String, String>) -> String {
     out
 }
 
-/// Собирает runner и спецификацию запуска.
+/// Builds the runner and the run specification.
 #[allow(clippy::too_many_arguments)]
 fn build_runner(
     args: &RunArgs,
@@ -200,7 +200,7 @@ fn build_runner(
         None => {
             let key = secrets
                 .require_llm_api_key()
-                .context("для реального прогона нужен ключ провайдера")?;
+                .context("a real run needs the provider key")?;
             config.llm.check_ready(secrets.llm_base_url.as_deref())?;
             env.push((config.llm.api_key_env(), key.to_string()));
             if let Some(base_url) = &secrets.llm_base_url {
@@ -231,7 +231,7 @@ fn build_runner(
             Mode::Review => Mount::ReadOnly,
             Mode::Patch => Mount::ReadWrite,
         },
-        // Промпт подставляет шаг пайплайна: у повторной попытки он другой.
+        // The pipeline step fills in the prompt: a retry uses a different one.
         prompt: String::new(),
         tools: skill.contract.tools.clone(),
         provider: config.llm.default_provider.clone(),
@@ -246,7 +246,7 @@ fn build_runner(
     Ok((runner, spec))
 }
 
-/// Файлы, с которыми будет работать скилл.
+/// The files the skill will work on.
 fn select_files(
     root: &Path,
     skill: &Skill,
@@ -261,7 +261,7 @@ fn select_files(
     } else {
         for file in requested {
             if !root.join(file).exists() {
-                bail!("файла {file} нет в {}", root.display());
+                bail!("there is no file {file} in {}", root.display());
             }
         }
         requested.to_vec()
@@ -274,7 +274,7 @@ fn select_files(
 
     if selected.len() > config.limits.max_changed_files {
         bail!(
-            "файлов слишком много: {} при лимите {} (сузь список через --files)",
+            "too many files: {} against a limit of {} (narrow it down with --files)",
             selected.len(),
             config.limits.max_changed_files
         );
@@ -282,7 +282,7 @@ fn select_files(
     Ok(selected)
 }
 
-/// Рекурсивно собирает относительные пути файлов, пропуская служебные каталоги.
+/// Recursively collects relative file paths, skipping service directories.
 fn walk(root: &Path, dir: &Path, out: &mut Vec<String>) -> Result<()> {
     for entry in std::fs::read_dir(dir)? {
         let path = entry?.path();
@@ -302,7 +302,7 @@ fn walk(root: &Path, dir: &Path, out: &mut Vec<String>) -> Result<()> {
     Ok(())
 }
 
-/// Docker принимает только абсолютные пути монтирования.
+/// Docker only accepts absolute mount paths.
 fn absolute(path: &Path) -> Result<PathBuf> {
     if path.is_absolute() {
         return Ok(path.to_path_buf());

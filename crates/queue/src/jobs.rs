@@ -1,4 +1,4 @@
-//! Жизненный цикл джобы в SQLite.
+//! Job lifecycle in SQLite.
 
 use std::path::{Path, PathBuf};
 
@@ -11,12 +11,12 @@ use sqlx::sqlite::SqliteRow;
 
 use crate::Store;
 
-/// Джоба вместе со служебными полями очереди.
+/// A job together with the queue's bookkeeping fields.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoredJob {
     pub job: Job,
     pub status: JobStatus,
-    /// Сколько раз джобу брали в работу.
+    /// How many times the job has been picked up.
     pub attempts: u32,
     pub error: Option<String>,
     pub log_path: Option<PathBuf>,
@@ -25,7 +25,7 @@ pub struct StoredJob {
 }
 
 impl Store {
-    /// Кладёт джобу в очередь. `false` — такой комментарий уже в базе.
+    /// Enqueues a job. `false` means this comment is already in the database.
     pub async fn enqueue(&self, job: &Job) -> Result<bool> {
         let args = serde_json::to_string(&job.command.args)
             .map_err(|e| Error::Storage(format!("args: {e}")))?;
@@ -57,7 +57,7 @@ impl Store {
         Ok(result.rows_affected() == 1)
     }
 
-    /// Берёт самую старую джобу из очереди и помечает её выполняющейся.
+    /// Claims the oldest queued job and marks it as running.
     pub async fn claim_next(&self) -> Result<Option<StoredJob>> {
         let row = sqlx::query(
             "UPDATE jobs
@@ -77,12 +77,12 @@ impl Store {
         row.map(stored_from_row).transpose()
     }
 
-    /// Завершает джобу успехом.
+    /// Completes the job successfully.
     pub async fn mark_done(&self, id: JobId, log_path: Option<&Path>) -> Result<()> {
         self.finish(id, JobStatus::Done, None, log_path).await
     }
 
-    /// Завершает джобу ошибкой.
+    /// Completes the job with an error.
     pub async fn mark_failed(&self, id: JobId, error: &str, log_path: Option<&Path>) -> Result<()> {
         self.finish(id, JobStatus::Failed, Some(error), log_path)
             .await
@@ -112,7 +112,7 @@ impl Store {
         Ok(())
     }
 
-    /// Возвращает джобу в очередь для повторной попытки.
+    /// Puts the job back into the queue for another attempt.
     pub async fn requeue(&self, id: JobId, error: &str) -> Result<()> {
         sqlx::query("UPDATE jobs SET status = ?1, error = ?2, started_at = NULL WHERE id = ?3")
             .bind(JobStatus::Queued.as_str())
@@ -124,14 +124,14 @@ impl Store {
         Ok(())
     }
 
-    /// При старте сервиса: всё, что осталось в `running`, возвращаем в очередь.
+    /// On service start: everything left in `running` goes back to the queue.
     ///
-    /// Возвращает число восстановленных джоб.
+    /// Returns the number of recovered jobs.
     pub async fn recover_running(&self) -> Result<u64> {
         let result = sqlx::query(
             "UPDATE jobs
                 SET status = ?1, started_at = NULL,
-                    error = 'сервис перезапущен во время выполнения'
+                    error = 'the service restarted while this job was running'
               WHERE status = ?2",
         )
         .bind(JobStatus::Queued.as_str())
@@ -142,7 +142,7 @@ impl Store {
         Ok(result.rows_affected())
     }
 
-    /// Джоба по идентификатору.
+    /// A job by its identifier.
     pub async fn job(&self, id: JobId) -> Result<Option<StoredJob>> {
         let row = sqlx::query("SELECT * FROM jobs WHERE id = ?1")
             .bind(id.to_string())
@@ -152,7 +152,7 @@ impl Store {
         row.map(stored_from_row).transpose()
     }
 
-    /// Сколько джоб в каждом статусе.
+    /// How many jobs are in a given status.
     pub async fn count_by_status(&self, status: JobStatus) -> Result<i64> {
         let row = sqlx::query("SELECT COUNT(*) AS n FROM jobs WHERE status = ?1")
             .bind(status.as_str())
@@ -162,7 +162,7 @@ impl Store {
         Ok(row.get("n"))
     }
 
-    /// Запоминает, куда писался лог джобы.
+    /// Records where the job's log was written.
     pub async fn set_log_path(&self, id: JobId, log_path: &Path) -> Result<()> {
         sqlx::query("UPDATE jobs SET log_path = ?1 WHERE id = ?2")
             .bind(log_path.to_string_lossy().to_string())
@@ -174,7 +174,7 @@ impl Store {
     }
 }
 
-/// Собирает [`StoredJob`] из строки БД.
+/// Builds a [`StoredJob`] from a database row.
 fn stored_from_row(row: SqliteRow) -> Result<StoredJob> {
     let bad = |what: &str, e: String| Error::Storage(format!("{what}: {e}"));
 
@@ -194,9 +194,7 @@ fn stored_from_row(row: SqliteRow) -> Result<StoredJob> {
         "issue" => CommentKind::Issue,
         "review" => CommentKind::Review,
         other => {
-            return Err(Error::Storage(format!(
-                "неизвестный тип комментария {other}"
-            )));
+            return Err(Error::Storage(format!("unknown comment kind {other}")));
         }
     };
 
@@ -239,7 +237,7 @@ fn stored_from_row(row: SqliteRow) -> Result<StoredJob> {
 
 fn parse_time(raw: &str) -> Result<DateTime<Utc>> {
     Ok(DateTime::parse_from_rfc3339(raw)
-        .map_err(|e| Error::Storage(format!("время {raw:?}: {e}")))?
+        .map_err(|e| Error::Storage(format!("timestamp {raw:?}: {e}")))?
         .with_timezone(&Utc))
 }
 
@@ -286,18 +284,25 @@ mod tests {
         assert!(store.enqueue(&job).await.unwrap());
         assert_eq!(store.count_by_status(JobStatus::Queued).await.unwrap(), 1);
 
-        let claimed = store.claim_next().await.unwrap().expect("джоба взята");
+        let claimed = store
+            .claim_next()
+            .await
+            .unwrap()
+            .expect("a job was claimed");
         assert_eq!(claimed.job.id, job.id);
         assert_eq!(claimed.status, JobStatus::Running);
         assert_eq!(claimed.attempts, 1);
         assert!(claimed.started_at.is_some());
-        // Аргументы и ссылка на PR восстановились полностью.
+        // Arguments and the PR reference were restored in full.
         assert_eq!(claimed.job.command.skill, "translate");
         assert_eq!(claimed.job.command.args.positional, vec!["en".to_string()]);
         assert_eq!(claimed.job.pr.head_sha, "abc123");
         assert_eq!(claimed.job.comment.kind, CommentKind::Issue);
 
-        assert!(store.claim_next().await.unwrap().is_none(), "очередь пуста");
+        assert!(
+            store.claim_next().await.unwrap().is_none(),
+            "the queue is empty"
+        );
 
         store
             .mark_done(job.id, Some(Path::new("/data/logs/x.log")))
@@ -313,7 +318,7 @@ mod tests {
     async fn duplicate_comment_is_rejected() {
         let store = store().await;
         assert!(store.enqueue(&job(1001, "/llm proofread")).await.unwrap());
-        // Другой id джобы, тот же комментарий.
+        // A different job id, the same comment.
         assert!(!store.enqueue(&job(1001, "/llm proofread")).await.unwrap());
         assert_eq!(store.count_by_status(JobStatus::Queued).await.unwrap(), 1);
     }
@@ -337,7 +342,7 @@ mod tests {
         store.enqueue(&job).await.unwrap();
         store.claim_next().await.unwrap();
         store
-            .mark_failed(job.id, "модель вернула невалидный JSON", None)
+            .mark_failed(job.id, "the model returned invalid JSON", None)
             .await
             .unwrap();
 
@@ -345,7 +350,7 @@ mod tests {
         assert_eq!(stored.status, JobStatus::Failed);
         assert_eq!(
             stored.error.as_deref(),
-            Some("модель вернула невалидный JSON")
+            Some("the model returned invalid JSON")
         );
     }
 
@@ -356,15 +361,18 @@ mod tests {
         store.enqueue(&job).await.unwrap();
 
         store.claim_next().await.unwrap();
-        store.requeue(job.id, "сеть отвалилась").await.unwrap();
+        store.requeue(job.id, "the network dropped").await.unwrap();
         let stored = store.job(job.id).await.unwrap().unwrap();
         assert_eq!(stored.status, JobStatus::Queued);
         assert_eq!(stored.attempts, 1);
-        assert_eq!(stored.error.as_deref(), Some("сеть отвалилась"));
+        assert_eq!(stored.error.as_deref(), Some("the network dropped"));
 
         let claimed = store.claim_next().await.unwrap().unwrap();
         assert_eq!(claimed.attempts, 2);
-        assert!(claimed.error.is_none(), "ошибка прошлой попытки сброшена");
+        assert!(
+            claimed.error.is_none(),
+            "the previous attempt's error is cleared"
+        );
     }
 
     #[tokio::test]
@@ -383,8 +391,8 @@ mod tests {
         assert_eq!(store.recover_running().await.unwrap(), 1);
         let stored = store.job(job.id).await.unwrap().unwrap();
         assert_eq!(stored.status, JobStatus::Queued);
-        assert!(stored.error.unwrap().contains("перезапущен"));
-        // Счётчик попыток сохранился: ретраи не обнуляются рестартом.
+        assert!(stored.error.unwrap().contains("restarted"));
+        // The attempt counter survived: a restart does not reset retries.
         assert_eq!(store.claim_next().await.unwrap().unwrap().attempts, 2);
     }
 
@@ -398,7 +406,10 @@ mod tests {
         store.claim_next().await.unwrap();
         store.mark_done(done.id, None).await.unwrap();
         store.claim_next().await.unwrap();
-        store.mark_failed(failed.id, "ошибка", None).await.unwrap();
+        store
+            .mark_failed(failed.id, "an error", None)
+            .await
+            .unwrap();
 
         assert_eq!(store.recover_running().await.unwrap(), 0);
         assert_eq!(store.count_by_status(JobStatus::Done).await.unwrap(), 1);
@@ -414,7 +425,7 @@ mod tests {
             .set_log_path(job.id, Path::new("/data/logs/job.log"))
             .await
             .unwrap();
-        // mark_done без пути не стирает уже записанный.
+        // mark_done without a path does not erase the one already stored.
         store.claim_next().await.unwrap();
         store.mark_done(job.id, None).await.unwrap();
         assert_eq!(

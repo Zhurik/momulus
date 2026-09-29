@@ -1,4 +1,4 @@
-//! Границы между ядром и платформами. Реализуй их, чтобы добавить новую платформу.
+//! The boundary between the core and the platforms. Implement these to add one.
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -9,75 +9,74 @@ use url::Url;
 use crate::error::Result;
 use crate::types::{AckState, Finding, Job, JobRef, Patch, PrRef, RunResult, RunSpec};
 
-/// Источник команд: следит за платформой и отдаёт джобы в очередь.
+/// Source of commands: watches the platform and emits jobs.
 #[async_trait]
 pub trait Trigger: Send + Sync {
-    /// Работает до отмены; каждая распознанная команда уходит в `tx`.
+    /// Runs until cancelled; every recognised command goes into `tx`.
     async fn run(&self, tx: mpsc::Sender<Job>, shutdown: CancellationToken) -> Result<()>;
 }
 
-/// Приёмник результатов: публикует ревью, патчи и статусы.
+/// Sink for results: publishes reviews, patches and statuses.
 #[async_trait]
 pub trait Publisher: Send + Sync {
-    /// Отметить состояние джобы на исходном комментарии (реакция).
+    /// Marks the job state on the originating comment (a reaction).
     async fn ack(&self, job: &JobRef, state: AckState) -> Result<()>;
 
-    /// Опубликовать ревью с inline-комментариями.
+    /// Publishes a review with inline comments.
     async fn post_review(&self, pr: &PrRef, findings: &[Finding], summary: &str) -> Result<()>;
 
-    /// Запушить ветку с изменениями и открыть PR; возвращает ссылку на него.
+    /// Pushes the branch with the changes and opens a PR; returns its link.
     async fn push_and_open_pr(&self, pr: &PrRef, patch: &Patch) -> Result<Url>;
 
-    /// Обычный комментарий в PR.
+    /// Posts a plain comment on the PR.
     async fn comment(&self, pr: &PrRef, body: &str) -> Result<()>;
 }
 
-/// Единственный LLM-шаг пайплайна.
+/// The single LLM step of the pipeline.
 #[async_trait]
 pub trait Runner: Send + Sync {
     async fn run(&self, spec: RunSpec) -> Result<RunResult>;
 }
 
-/// Где Trigger держит позицию опроса и память о разобранных комментариях.
+/// Where the Trigger keeps its polling position and the memory of handled comments.
 ///
-/// Вынесено в трейт, чтобы платформенный код не зависел от SQLite.
+/// Behind a trait so that platform code does not depend on SQLite.
 #[async_trait]
 pub trait CursorStore: Send + Sync {
-    /// Позиция опроса для пары «репозиторий + поток комментариев».
+    /// Polling position for a "repository + comment stream" pair.
     async fn cursor(&self, repo_key: &str, stream: &str) -> Result<Option<DateTime<Utc>>>;
 
-    /// Запоминает новую позицию.
+    /// Stores a new position.
     async fn set_cursor(&self, repo_key: &str, stream: &str, value: DateTime<Utc>) -> Result<()>;
 
-    /// Помечает комментарий разобранным. `true` — видим его впервые.
+    /// Marks a comment as handled. `true` means we are seeing it for the first time.
     ///
-    /// Нужно, чтобы не отвечать дважды на один и тот же комментарий, даже если
-    /// курсор вернулся назад или комментарий отредактировали.
+    /// Keeps us from answering the same comment twice, even if the cursor moved
+    /// backwards or the comment was edited.
     async fn mark_seen(&self, platform: &str, comment_id: u64) -> Result<bool>;
 }
 
-/// Взгляд Trigger'а на реестр скиллов: проверить имя и показать help.
+/// The Trigger's view of the skill registry: check a name and show help.
 ///
-/// Тоже трейт: реестр живёт в другом крейте и может перезагружаться на SIGHUP.
+/// Also a trait: the registry lives in another crate and can be reloaded on SIGHUP.
 #[async_trait]
 pub trait SkillCatalog: Send + Sync {
     async fn contains(&self, skill: &str) -> bool;
     async fn help_text(&self) -> String;
 }
 
-/// Доступ к git-ремоуту платформы: токен и нужные refspec'и.
+/// Access to the platform's git remote: the token and the refspecs to fetch.
 ///
-/// Разные платформы по-разному называют ссылки на PR, поэтому это тоже
-/// платформенная деталь за трейтом.
+/// Platforms name their PR refs differently, so this is a platform detail too.
 #[async_trait]
 pub trait GitAccess: Send + Sync {
-    /// Токен для fetch/push; `None` — ремоут доступен без авторизации.
+    /// Token for fetch/push; `None` means the remote needs no authentication.
     async fn git_token(&self, pr: &PrRef) -> Result<Option<String>>;
 
-    /// Что подтянуть, чтобы получить head PR и его базовую ветку.
+    /// What to fetch in order to get the PR head and its base branch.
     fn refspecs(&self, pr: &PrRef) -> Vec<String>;
 
-    /// Ссылка, от которой считаем diff PR (обычно базовая ветка).
+    /// The revision the PR diff is computed against (usually the base branch).
     fn base_rev(&self, pr: &PrRef) -> String {
         format!("refs/heads/{}", pr.base_ref)
     }

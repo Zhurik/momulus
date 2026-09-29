@@ -1,7 +1,7 @@
-//! Сквозные тесты: команда в комментарии PR → результат опубликован.
+//! End-to-end tests: a command in a PR comment → a published result.
 //!
-//! Настоящих внешних зависимостей нет: GitHub подменён wiremock, LLM — FakeRunner,
-//! remote — локальный bare-репозиторий.
+//! No real external dependencies: GitHub is wiremock, the LLM is FakeRunner,
+//! and the remote is a local bare repository.
 
 use std::path::Path;
 use std::process::Command as StdCommand;
@@ -38,7 +38,7 @@ fn git(dir: &Path, args: &[&str]) -> String {
         .env("GIT_COMMITTER_NAME", "test")
         .env("GIT_COMMITTER_EMAIL", "test@example.com")
         .output()
-        .expect("git запускается");
+        .expect("git starts");
     assert!(
         out.status.success(),
         "git {args:?}: {}",
@@ -47,30 +47,30 @@ fn git(dir: &Path, args: &[&str]) -> String {
     String::from_utf8_lossy(&out.stdout).trim().to_string()
 }
 
-/// Bare-remote с ветками main и feature; feature правит статью.
-/// Возвращает (путь к bare, head SHA ветки feature).
+/// A bare remote with main and feature branches; feature edits the post.
+/// Returns (path to the bare repo, head SHA of the feature branch).
 fn fixture_remote(tmp: &Path) -> (String, String) {
     let seed = tmp.join("seed");
     std::fs::create_dir_all(seed.join("content/posts/dns")).unwrap();
     git(&seed, &["init", "--quiet", "--initial-branch=main"]);
     std::fs::write(
         seed.join("content/posts/dns/index.ru.md"),
-        "# DNS\n\nстарый текст\nхвост\n",
+        "# DNS\n\nold text\ntail\n",
     )
     .unwrap();
     std::fs::write(seed.join("astro.config.ts"), "export default {}\n").unwrap();
     git(&seed, &["add", "."]);
-    git(&seed, &["commit", "--quiet", "-m", "начало"]);
+    git(&seed, &["commit", "--quiet", "-m", "initial"]);
 
     git(&seed, &["checkout", "--quiet", "-b", "feature"]);
     std::fs::write(
         seed.join("content/posts/dns/index.ru.md"),
-        "# DNS\n\nновый текст с ашибкой\nещё строка\nхвост\n",
+        "# DNS\n\nnew text with a tpyo\none more line\ntail\n",
     )
     .unwrap();
     std::fs::write(seed.join("astro.config.ts"), "export default { site: 1 }\n").unwrap();
     git(&seed, &["add", "."]);
-    git(&seed, &["commit", "--quiet", "-m", "правки"]);
+    git(&seed, &["commit", "--quiet", "-m", "edits"]);
     let head = git(&seed, &["rev-parse", "HEAD"]);
     git(&seed, &["checkout", "--quiet", "main"]);
 
@@ -82,7 +82,7 @@ fn fixture_remote(tmp: &Path) -> (String, String) {
     (bare.to_string_lossy().to_string(), head)
 }
 
-/// Каталог со скиллами proofread (review) и translate (patch).
+/// A skills directory with proofread (review) and translate (patch).
 fn fixture_skills(dir: &Path) {
     let proofread = dir.join("proofread");
     std::fs::create_dir_all(&proofread).unwrap();
@@ -93,7 +93,7 @@ fn fixture_skills(dir: &Path) {
     .unwrap();
     std::fs::write(
         proofread.join("SKILL.md"),
-        "---\nname: proofread\ndescription: вычитка статей\n---\n\nинструкции\n",
+        "---\nname: proofread\ndescription: proofreading posts\n---\n\ninstructions\n",
     )
     .unwrap();
 
@@ -106,7 +106,7 @@ fn fixture_skills(dir: &Path) {
     .unwrap();
     std::fs::write(
         translate.join("SKILL.md"),
-        "---\nname: translate\ndescription: перевод статей\n---\n\nинструкции\n",
+        "---\nname: translate\ndescription: translating posts\n---\n\ninstructions\n",
     )
     .unwrap();
 }
@@ -129,7 +129,7 @@ fn fast_backoff() -> Backoff {
     }
 }
 
-/// Мокает всё, что нужно триггеру: комментарий с командой и данные PR.
+/// Mocks everything the trigger needs: the command comment and the PR data.
 async fn mock_trigger(server: &MockServer, body: &str, remote: &str, head_sha: &str) {
     Mock::given(method("GET"))
         .and(path("/repos/acme/blog/issues/comments"))
@@ -167,7 +167,7 @@ async fn mock_trigger(server: &MockServer, body: &str, remote: &str, head_sha: &
         })))
         .mount(server)
         .await;
-    // Реакции на комментарий-команду.
+    // Reactions on the command comment.
     Mock::given(method("POST"))
         .and(path("/repos/acme/blog/issues/comments/1001/reactions"))
         .respond_with(ResponseTemplate::new(201).set_body_json(json!({ "id": 1 })))
@@ -217,10 +217,10 @@ fn pipeline(
             work_dir: tmp.join("work"),
             logs_dir: tmp.join("logs"),
             skills_dir: skills_dir.to_path_buf(),
-            provider: "cloudru".into(),
-            model: "zai-org/GLM-5.1".into(),
+            provider: "openai".into(),
+            model: "gpt-5.1".into(),
             api: None,
-            api_key_env: "CLOUDRU_API_KEY".into(),
+            api_key_env: "OPENAI_API_KEY".into(),
             api_key: Some("test-key".into()),
             base_url: None,
             image: "momulus-runner:latest".into(),
@@ -231,7 +231,7 @@ fn pipeline(
     ))
 }
 
-/// Обработчик для воркера: тонкая обёртка над пайплайном.
+/// Handler for the worker: a thin wrapper around the pipeline.
 struct PipelineHandler {
     pipeline: Arc<Pipeline>,
     outcomes: tokio::sync::Mutex<Vec<Outcome>>,
@@ -254,7 +254,7 @@ impl JobHandler for PipelineHandler {
     }
 }
 
-/// Прогоняет триггер, воркер и пайплайн до появления джобы в терминальном статусе.
+/// Drives trigger, worker and pipeline until the job reaches a terminal status.
 async fn run_pipeline_once(
     store: Store,
     trigger: GithubTrigger,
@@ -278,7 +278,7 @@ async fn run_pipeline_once(
         tokio::spawn(async move { worker.run(rx, shutdown).await })
     };
 
-    // Одного прохода опроса достаточно: команда уже лежит в моках.
+    // One polling pass is enough: the command already sits in the mocks.
     for job in trigger.poll_once().await.unwrap() {
         tx.send(job).await.unwrap();
     }
@@ -315,18 +315,18 @@ async fn review_command_publishes_a_review() {
         .mount(&server)
         .await;
 
-    // Модель нашла две проблемы: одну в diff, одну за его пределами.
+    // The model found problems: one inside the diff, others outside it.
     let runner = Arc::new(FakeRunner::with_findings(
         r#"{
-            "summary": "Одна опечатка и одно замечание вне diff.",
+            "summary": "One typo plus a finding outside the diff.",
             "findings": [
                 { "path": "/work/content/posts/dns/index.ru.md", "line": 3,
-                  "severity": "typo", "body": "ашибкой → ошибкой",
-                  "suggestion": "новый текст с ошибкой" },
+                  "severity": "typo", "body": "tpyo → typo",
+                  "suggestion": "new text with a typo" },
                 { "path": "content/posts/dns/index.ru.md", "line": 999,
-                  "severity": "style", "body": "вне diff" },
+                  "severity": "style", "body": "outside the diff" },
                 { "path": "astro.config.ts", "line": 1,
-                  "severity": "other", "body": "файл вне области скилла" }
+                  "severity": "other", "body": "file outside the skill scope" }
             ]
         }"#,
     ));
@@ -343,18 +343,18 @@ async fn review_command_publishes_a_review() {
     assert_eq!(store.count_by_status(JobStatus::Done).await.unwrap(), 1);
     assert_eq!(outcomes, vec![Outcome::Review { findings: 3 }]);
 
-    // Проверяем то, что реально ушло в GitHub.
+    // Check what actually went to GitHub.
     let requests = server.received_requests().await.unwrap();
     let review = requests
         .iter()
         .find(|r| r.url.path() == "/repos/acme/blog/pulls/42/reviews")
-        .expect("ревью опубликовано");
+        .expect("the review was published");
     let body: serde_json::Value = serde_json::from_slice(&review.body).unwrap();
     assert_eq!(body["event"], "COMMENT");
     assert_eq!(body["commit_id"], head);
 
     let comments = body["comments"].as_array().unwrap();
-    assert_eq!(comments.len(), 1, "inline только то, что попало в diff");
+    assert_eq!(comments.len(), 1, "only diff lines get inline comments");
     assert_eq!(comments[0]["path"], "content/posts/dns/index.ru.md");
     assert_eq!(comments[0]["line"], 3);
     assert!(
@@ -367,10 +367,10 @@ async fn review_command_publishes_a_review() {
     );
 
     let summary = body["body"].as_str().unwrap();
-    assert!(summary.contains("вне diff"), "{summary}");
+    assert!(summary.contains("outside the diff"), "{summary}");
     assert!(summary.contains("astro.config.ts"), "{summary}");
 
-    // Реакции: 👀 при взятии и ✅ в конце.
+    // Reactions: 👀 when picked up and ✅ at the end.
     let reactions: Vec<String> = requests
         .iter()
         .filter(|r| r.url.path().ends_with("/reactions"))
@@ -383,12 +383,12 @@ async fn review_command_publishes_a_review() {
         .collect();
     assert_eq!(reactions, vec!["eyes", "+1"]);
 
-    // Лог агента сохранён, рабочая копия убрана.
+    // The agent log was stored and the working copy was removed.
     assert!(tmp.path().join("logs").read_dir().unwrap().next().is_some());
     assert!(
         !tmp.path().join("work").exists()
             || tmp.path().join("work").read_dir().unwrap().next().is_none(),
-        "worktree удалён"
+        "the worktree is gone"
     );
     assert_eq!(runner.call_count(), 1);
 }
@@ -417,13 +417,13 @@ async fn patch_command_pushes_a_branch_and_opens_a_pull_request() {
         .mount(&server)
         .await;
 
-    // Модель создала перевод и оставила резюме.
+    // The model produced a translation and left a summary.
     let runner = Arc::new(FakeRunner::new(vec![FakeResponse::patch(
         vec![(
             "content/posts/dns/index.en.md".into(),
             "# DNS\n\nnew text with a typo\n".into(),
         )],
-        "Перевёл статью про DNS, код и ссылки не трогал.",
+        "Translated the DNS post; code and links were left untouched.",
     )]));
 
     let store = Store::new(Db::open_in_memory().await.unwrap());
@@ -441,7 +441,7 @@ async fn patch_command_pushes_a_branch_and_opens_a_pull_request() {
         "{outcomes:?}"
     );
 
-    // Ветка ушла в bare-remote вместе с переводом.
+    // The branch reached the bare remote together with the translation.
     let branches = git(Path::new(&remote), &["branch", "--list"]);
     assert!(branches.contains("llm/translate-en-42"), "{branches}");
     let files = git(
@@ -450,18 +450,21 @@ async fn patch_command_pushes_a_branch_and_opens_a_pull_request() {
     );
     assert!(files.contains("content/posts/dns/index.en.md"), "{files}");
 
-    // Тело PR содержит команду, резюме скилла и список файлов.
+    // The PR body carries the command, the skill summary and the file list.
     let requests = server.received_requests().await.unwrap();
     let created = requests
         .iter()
         .find(|r| r.url.path() == "/repos/acme/blog/pulls")
-        .expect("PR создан");
+        .expect("the PR was created");
     let body: serde_json::Value = serde_json::from_slice(&created.body).unwrap();
-    assert_eq!(body["base"], "feature", "база — head-ветка исходного PR");
+    assert_eq!(
+        body["base"], "feature",
+        "the base is the original PR's head branch"
+    );
     assert_eq!(body["head"], "llm/translate-en-42");
     let text = body["body"].as_str().unwrap();
     assert!(text.contains("/llm translate en"), "{text}");
-    assert!(text.contains("Перевёл статью про DNS"), "{text}");
+    assert!(text.contains("Translated the DNS post"), "{text}");
     assert!(text.contains("content/posts/dns/index.en.md"), "{text}");
 }
 
@@ -481,10 +484,10 @@ async fn patch_without_changes_is_reported_as_a_comment() {
         .mount(&server)
         .await;
 
-    // Скилл ничего не изменил, только написал summary.
+    // The skill changed nothing and only wrote a summary.
     let runner = Arc::new(FakeRunner::new(vec![FakeResponse::patch(
         Vec::new(),
-        "Всё уже переведено.",
+        "Everything is already translated.",
     )]));
 
     let store = Store::new(Db::open_in_memory().await.unwrap());
@@ -502,13 +505,13 @@ async fn patch_without_changes_is_reported_as_a_comment() {
     let comment = requests
         .iter()
         .find(|r| r.url.path() == "/repos/acme/blog/issues/42/comments")
-        .expect("комментарий отправлен");
+        .expect("the comment was posted");
     let body: serde_json::Value = serde_json::from_slice(&comment.body).unwrap();
     let text = body["body"].as_str().unwrap();
-    assert!(text.contains("изменений в файлах нет"), "{text}");
-    assert!(text.contains("Всё уже переведено"), "{text}");
+    assert!(text.contains("no files were changed"), "{text}");
+    assert!(text.contains("Everything is already translated"), "{text}");
 
-    // Ветка не создавалась.
+    // No branch was created.
     let branches = git(Path::new(&remote), &["branch", "--list"]);
     assert!(!branches.contains("llm/translate"), "{branches}");
 }
@@ -530,8 +533,8 @@ async fn invalid_model_output_twice_fails_the_job_with_a_comment() {
         .await;
 
     let runner = Arc::new(FakeRunner::new(vec![
-        FakeResponse::findings("не json"),
-        FakeResponse::findings("тоже не json"),
+        FakeResponse::findings("not json"),
+        FakeResponse::findings("also not json"),
     ]));
 
     let store = Store::new(Db::open_in_memory().await.unwrap());
@@ -543,18 +546,18 @@ async fn invalid_model_output_twice_fails_the_job_with_a_comment() {
     run_pipeline_once(store.clone(), trigger(&server, &["proofread"]), handler).await;
 
     assert_eq!(store.count_by_status(JobStatus::Failed).await.unwrap(), 1);
-    assert_eq!(runner.call_count(), 2, "одна повторная попытка");
+    assert_eq!(runner.call_count(), 2, "exactly one retry");
 
     let requests = server.received_requests().await.unwrap();
     let comment = requests
         .iter()
         .find(|r| r.url.path() == "/repos/acme/blog/issues/42/comments")
-        .expect("сообщение об ошибке");
+        .expect("an error message");
     let body: serde_json::Value = serde_json::from_slice(&comment.body).unwrap();
     let text = body["body"].as_str().unwrap();
-    assert!(text.contains("не выполнена"), "{text}");
+    assert!(text.contains("did not run"), "{text}");
     assert!(!text.contains("panicked"), "{text}");
-    // Отметка о провале.
+    // The failure reaction.
     let reactions: Vec<String> = requests
         .iter()
         .filter(|r| r.url.path().ends_with("/reactions"))
@@ -574,7 +577,7 @@ async fn skill_without_matching_files_says_nothing_to_do() {
     let (remote, head) = fixture_remote(tmp.path());
     let skills = tmp.path().join("skills");
     fixture_skills(&skills);
-    // Сужаем фильтр так, чтобы ни один файл PR не подошёл.
+    // Narrow the filter so that no PR file matches.
     std::fs::write(
         skills.join("proofread/skill.toml"),
         "mode = \"review\"\ntools = [\"read\", \"write\"]\nfiles = [\"**/*.rst\"]\n",
@@ -590,7 +593,7 @@ async fn skill_without_matching_files_says_nothing_to_do() {
         .mount(&server)
         .await;
 
-    // Модель не должна вызываться вовсе.
+    // The model must not be called at all.
     let runner = Arc::new(FakeRunner::new(Vec::new()));
     let store = Store::new(Db::open_in_memory().await.unwrap());
     let handler = Arc::new(PipelineHandler {
@@ -601,7 +604,7 @@ async fn skill_without_matching_files_says_nothing_to_do() {
     let outcomes =
         run_pipeline_once(store.clone(), trigger(&server, &["proofread"]), handler).await;
     assert_eq!(outcomes, vec![Outcome::NothingToDo]);
-    assert_eq!(runner.call_count(), 0, "LLM не вызывалась");
+    assert_eq!(runner.call_count(), 0, "the LLM was never called");
 
     let requests = server.received_requests().await.unwrap();
     let comment = requests
@@ -610,7 +613,7 @@ async fn skill_without_matching_files_says_nothing_to_do() {
         .unwrap();
     let body: serde_json::Value = serde_json::from_slice(&comment.body).unwrap();
     assert!(
-        body["body"].as_str().unwrap().contains("Нечего делать"),
+        body["body"].as_str().unwrap().contains("Nothing to do"),
         "{body}"
     );
 }
@@ -623,7 +626,7 @@ async fn patch_from_a_fork_is_refused_before_calling_the_model() {
     fixture_skills(&skills);
 
     let server = MockServer::start().await;
-    // head PR — в форке.
+    // The PR head lives in a fork.
     Mock::given(method("GET"))
         .and(path("/repos/acme/blog/issues/comments"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!([{
@@ -682,7 +685,7 @@ async fn patch_from_a_fork_is_refused_before_calling_the_model() {
     let outcomes =
         run_pipeline_once(store.clone(), trigger(&server, &["translate"]), handler).await;
     assert!(
-        matches!(&outcomes[0], Outcome::Rejected { reason } if reason.contains("форка")),
+        matches!(&outcomes[0], Outcome::Rejected { reason } if reason.contains("fork")),
         "{outcomes:?}"
     );
     assert_eq!(runner.call_count(), 0);
@@ -693,5 +696,5 @@ async fn patch_from_a_fork_is_refused_before_calling_the_model() {
         .find(|r| r.url.path() == "/repos/acme/blog/issues/42/comments")
         .unwrap();
     let body: serde_json::Value = serde_json::from_slice(&comment.body).unwrap();
-    assert!(body["body"].as_str().unwrap().contains("форка"), "{body}");
+    assert!(body["body"].as_str().unwrap().contains("fork"), "{body}");
 }

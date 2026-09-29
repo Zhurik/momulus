@@ -1,4 +1,4 @@
-//! Резолвер клиентов и токенов по репозиторию: у каждой установки свой токен.
+//! Resolves clients and tokens per repository: every installation has its own token.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -13,13 +13,13 @@ use crate::backoff::Backoff;
 use crate::error::from_octocrab;
 use crate::models::Installation;
 
-/// Откуда Publisher берёт клиент для конкретного PR.
+/// Where the Publisher gets a client for a particular PR.
 #[async_trait]
 pub trait ClientProvider: Send + Sync {
     async fn client(&self, pr: &PrRef) -> Result<Octocrab>;
 }
 
-/// Один и тот же клиент на всё — для одного репозитория и для тестов.
+/// One client for everything — for a single repository and for tests.
 pub struct FixedClient(pub Octocrab);
 
 #[async_trait]
@@ -29,7 +29,7 @@ impl ClientProvider for FixedClient {
     }
 }
 
-/// Приложение, которое умеет найти установку по репозиторию.
+/// An App that can find the installation covering a repository.
 pub struct GithubApp {
     auth: Arc<AppAuth>,
     /// owner/repo → installation id.
@@ -46,7 +46,7 @@ impl GithubApp {
         })
     }
 
-    /// Установка, в которую входит репозиторий; результат кэшируется.
+    /// The installation the repository belongs to; the result is cached.
     pub async fn installation_id(&self, owner: &str, repo: &str) -> Result<u64> {
         let key = format!("{owner}/{repo}");
         if let Some(id) = self.installations.lock().await.get(&key) {
@@ -69,7 +69,7 @@ impl GithubApp {
         Ok(installation.id)
     }
 
-    /// Токен установки для git-операций с этим репозиторием.
+    /// Installation token for git operations on this repository.
     pub async fn token(&self, pr: &PrRef) -> Result<String> {
         let id = self.installation_id(&pr.owner, &pr.repo).await?;
         self.auth.installation_token(id).await
@@ -91,8 +91,8 @@ impl GitAccess for GithubApp {
     }
 
     fn refspecs(&self, pr: &PrRef) -> Vec<String> {
-        // head PR лежит в refs/pull/<n>/head — работает и для форков;
-        // базовая ветка нужна, чтобы посчитать diff.
+        // The PR head lives in refs/pull/<n>/head — this works for forks too;
+        // the base branch is needed to compute the diff.
         vec![
             format!("+refs/pull/{n}/head:refs/pull/{n}/head", n = pr.number),
             format!("+refs/heads/{base}:refs/heads/{base}", base = pr.base_ref),

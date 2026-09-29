@@ -1,11 +1,11 @@
-//! Инициализация tracing: человекочитаемый или JSON-формат.
+//! tracing setup: human-readable or JSON output.
 
 use anyhow::{Context, Result};
 use tracing_subscriber::EnvFilter;
 
 use crate::cli::LogFormat;
 
-/// Настраивает глобальный подписчик логов.
+/// Installs the global log subscriber.
 pub fn init(format: LogFormat, level: &str) -> Result<()> {
     let filter = EnvFilter::try_from_default_env()
         .or_else(|_| EnvFilter::try_new(level))

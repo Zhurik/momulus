@@ -4,26 +4,26 @@ expression: ctx.render()
 ---
 /skill:proofread
 
-Контекст: pull request #42 в репозитории acme/blog.
-Рабочая копия смонтирована в /work. Все пути ниже — относительно /work.
+Context: pull request #42 in the repository acme/blog.
+The working copy is mounted at /work. Every path below is relative to /work.
 
-Файлы, с которыми нужно работать:
+Files to work on:
 - posts/hello.mdx
 - posts/next.mdx
 
-## Что вернуть
+## What to return
 
-Запиши результат инструментом write в файл /out/findings.json.
-Это единственный артефакт; в stdout ничего структурированного писать не нужно.
-Рабочая копия /work смонтирована только для чтения — менять в ней ничего нельзя.
+Use the write tool to store the result in /out/findings.json.
+That file is the only artifact; nothing structured needs to go to stdout.
+The working copy at /work is mounted read-only — do not change anything there.
 
-Файл обязан быть валидным JSON по этой JSON Schema:
+The file must be valid JSON matching this JSON Schema:
 
 ```json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "ReviewOutput",
-  "description": "Результат работы скилла в режиме review — ровно то, что пишет модель.",
+  "description": "Output of a review-mode skill — exactly what the model writes.",
   "type": "object",
   "properties": {
     "findings": {
@@ -34,7 +34,7 @@ expression: ctx.render()
       }
     },
     "summary": {
-      "description": "Краткое резюме ревью.",
+      "description": "Short review summary.",
       "type": "string"
     }
   },
@@ -44,28 +44,28 @@ expression: ctx.render()
   ],
   "$defs": {
     "Finding": {
-      "description": "Одно замечание модели, привязанное к строке файла.",
+      "description": "A single model finding, anchored to a line of a file.",
       "type": "object",
       "properties": {
         "body": {
-          "description": "Текст замечания.",
+          "description": "Finding text.",
           "type": "string"
         },
         "line": {
-          "description": "Номер строки в новой версии файла (1-based).",
+          "description": "Line number in the new version of the file (1-based).",
           "type": "integer",
           "format": "uint32",
           "minimum": 0
         },
         "path": {
-          "description": "Путь к файлу относительно корня репозитория.",
+          "description": "File path relative to the repository root.",
           "type": "string"
         },
         "severity": {
           "$ref": "#/$defs/Severity"
         },
         "suggestion": {
-          "description": "Предлагаемая замена строки целиком, если применимо.",
+          "description": "Suggested replacement for the whole line, when applicable.",
           "type": [
             "string",
             "null"
@@ -81,7 +81,7 @@ expression: ctx.render()
       ]
     },
     "Severity": {
-      "description": "Категория замечания.",
+      "description": "Finding category.",
       "type": "string",
       "enum": [
         "typo",
@@ -98,16 +98,19 @@ expression: ctx.render()
 }
 ```
 
-Правила:
-- `path` — путь относительно /work, ровно как в списке файлов выше;
-- `line` — номер строки в текущей (новой) версии файла, начиная с 1;
-- `severity` — одно из значений схемы;
-- `body` — короткое замечание на русском: что не так и что сделать;
-- `suggestion` — необязательная замена строки целиком, без markdown-обёртки
-  и без номера строки;
-- `summary` — 2–5 предложений: общая картина и то, что не уложилось в замечания;
-- не больше 5 замечаний; если нашёл больше — оставь самые важные
-  и скажи об остальных в `summary`;
-- если замечаний нет, верни пустой массив `findings` и напиши это в `summary`.
+Rules:
+- `path` — a path relative to /work, exactly as in the file list above;
+- `line` — the line number in the current (new) version of the file, starting at 1;
+- `severity` — one of the values from the schema;
+- `body` — a short note: what is wrong and what to do about it. Write it in the
+  same language as the file you are reviewing;
+- `suggestion` — an optional replacement for the whole line, with no markdown
+  fence and no line number;
+- `summary` — 2–5 sentences: the overall picture plus anything that did not fit
+  into individual findings;
+- at most 5 findings; if you have more, keep the important ones and mention
+  the rest in `summary`;
+- if there is nothing to report, return an empty `findings` array and say so in
+  `summary`.
 
-Не пиши никаких других файлов и не меняй файлы в /work.
+Do not write any other file and do not modify anything under /work.
