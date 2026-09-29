@@ -64,6 +64,10 @@ fn ok_result() -> RunResult {
 #[derive(Debug)]
 pub struct FakeRunner {
     responses: Mutex<Vec<FakeResponse>>,
+    /// Последний отданный ответ — для режима повтора.
+    last: Mutex<Option<FakeResponse>>,
+    /// Повторять последний ответ, когда очередь исчерпана.
+    repeat: bool,
     calls: Mutex<Vec<RunSpec>>,
 }
 
@@ -72,8 +76,17 @@ impl FakeRunner {
     pub fn new(responses: Vec<FakeResponse>) -> FakeRunner {
         FakeRunner {
             responses: Mutex::new(responses.into_iter().rev().collect()),
+            last: Mutex::new(None),
+            repeat: false,
             calls: Mutex::new(Vec::new()),
         }
+    }
+
+    /// Отдавать последний ответ и дальше — так ведёт себя `--fake-runner <dir>`:
+    /// каталог с артефактами один и тот же на каждую попытку.
+    pub fn repeating(mut self) -> FakeRunner {
+        self.repeat = true;
+        self
     }
 
     /// Один успешный ответ с находками.
@@ -98,7 +111,8 @@ impl FakeRunner {
             out_files,
             work_files: Vec::new(),
             result: ok_result(),
-        }]))
+        }])
+        .repeating())
     }
 }
 
@@ -128,9 +142,23 @@ impl Runner for FakeRunner {
     async fn run(&self, spec: RunSpec) -> Result<RunResult> {
         let response = {
             let mut responses = self.responses.lock().expect("mutex");
-            responses.pop().ok_or_else(|| {
-                Error::Runner("FakeRunner: ответы закончились, а его снова вызвали".into())
-            })?
+            match responses.pop() {
+                Some(response) => {
+                    *self.last.lock().expect("mutex") = Some(response.clone());
+                    response
+                }
+                None => {
+                    let last = self.last.lock().expect("mutex").clone();
+                    match last.filter(|_| self.repeat) {
+                        Some(response) => response,
+                        None => {
+                            return Err(Error::Runner(
+                                "FakeRunner: ответы закончились, а его снова вызвали".into(),
+                            ));
+                        }
+                    }
+                }
+            }
         };
 
         write_files(&spec.out_dir, &response.out_files)?;
@@ -243,6 +271,19 @@ mod tests {
             "Hello\n"
         );
         assert!(out.join("summary.md").exists());
+    }
+
+    #[tokio::test]
+    async fn repeating_runner_answers_every_attempt() {
+        let tmp = tempfile::tempdir().unwrap();
+        let out = tmp.path().join("out");
+        let work = tmp.path().join("work");
+        std::fs::create_dir_all(&work).unwrap();
+
+        let runner = FakeRunner::new(vec![FakeResponse::findings("{}")]).repeating();
+        runner.run(spec(out.clone(), work.clone())).await.unwrap();
+        runner.run(spec(out.clone(), work)).await.unwrap();
+        assert_eq!(runner.call_count(), 2);
     }
 
     #[tokio::test]

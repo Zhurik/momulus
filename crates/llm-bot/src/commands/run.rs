@@ -5,8 +5,11 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use llm_bot_core::{Args as CommandArgs, Config, JobId, Mount, RunSpec, Runner, Secrets};
-use llm_bot_pipeline::FakeRunner;
-use llm_bot_pipeline::prompt::{FINDINGS_FILE, Origin, PromptContext, SUMMARY_FILE};
+use llm_bot_pipeline::prompt::{Origin, PromptContext};
+use llm_bot_pipeline::{
+    FakeRunner, JobContext, check_input, combined_log, measure_files, prepare_review, render,
+    run_patch, run_review,
+};
 use llm_bot_runner_docker::{DockerRunner, models_json};
 use llm_bot_skills::{Mode, Registry, Skill};
 
@@ -46,15 +49,17 @@ pub async fn run(cli: &Cli, args: &RunArgs) -> Result<()> {
         .resolve_args(&skill.name, &command_args)
         .map_err(anyhow::Error::from)?;
 
-    let prompt = PromptContext {
+    let prompt_ctx = PromptContext {
         skill,
         files: &files,
         args: &resolved,
         origin: Origin::Local {
             path: repo_path.display().to_string(),
         },
-    }
-    .render();
+    };
+
+    // Тот же лимит на размер входа, что и в джобах из PR.
+    check_input(0, &measure_files(&repo_path, &files), &config.limits)?;
 
     let out_dir = absolute(&args.out)?;
     std::fs::create_dir_all(&out_dir)?;
@@ -68,7 +73,6 @@ pub async fn run(cli: &Cli, args: &RunArgs) -> Result<()> {
         &repo_path,
         &skills_dir,
         &out_dir,
-        prompt,
     )?;
 
     println!(
@@ -79,35 +83,97 @@ pub async fn run(cli: &Cli, args: &RunArgs) -> Result<()> {
         out_dir.display()
     );
 
-    let result = runner.run(spec).await?;
-
+    let job_ctx = JobContext {
+        job_id: spec.job_id,
+        skill: &skill.name,
+        command: &command_line(&skill.name, &resolved),
+    };
     let log_path = out_dir.join("pi.log");
-    std::fs::write(&log_path, result.combined_log())?;
 
-    println!("\n--- вывод pi ---\n{}", result.stdout.trim_end());
-    if !result.stderr.trim().is_empty() {
-        eprintln!("--- stderr pi ---\n{}", result.stderr.trim_end());
-    }
-    println!(
-        "\nкод возврата: {}{}\nлог: {}",
-        result.exit_code,
-        if result.timed_out {
-            " (таймаут)"
-        } else {
-            ""
-        },
-        log_path.display()
-    );
+    match skill.contract.mode {
+        Mode::Review => {
+            let step = run_review(runner.as_ref(), spec, &prompt_ctx).await;
+            let step = finish(step, &log_path)?;
+            std::fs::write(&log_path, combined_log(&step.runs))?;
+            print_runs(&step.runs);
 
-    if result.timed_out {
-        bail!("скилл не уложился в таймаут {:?}", skill.contract.timeout);
-    }
-    if !result.is_success() {
-        bail!("pi завершился с кодом {}", result.exit_code);
+            let result = prepare_review(
+                step.output,
+                &files,
+                // Локальный прогон не привязан к PR, diff'а нет.
+                None,
+                skill.contract.max_comments(),
+            );
+            println!(
+                "\n--- ревью ---\n{}",
+                render::review_summary(&result, &job_ctx, files.len())
+            );
+            for finding in &result.inline {
+                println!(
+                    "{}:{} [{}] {}",
+                    finding.path,
+                    finding.line,
+                    finding.severity.as_str(),
+                    finding.body
+                );
+                if let Some(suggestion) = &finding.suggestion {
+                    println!("    предложение: {suggestion}");
+                }
+            }
+            println!(
+                "\nвсего замечаний: {} (inline {}, вне diff {}, чужие файлы {}), попыток: {}",
+                result.kept(),
+                result.inline.len(),
+                result.out_of_diff.len(),
+                result.unknown_path.len(),
+                step.runs.len()
+            );
+        }
+        Mode::Patch => {
+            let step = run_patch(runner.as_ref(), spec, &prompt_ctx).await;
+            let step = finish(step, &log_path)?;
+            std::fs::write(&log_path, combined_log(&step.runs))?;
+            print_runs(&step.runs);
+
+            match &step.summary {
+                Some(summary) => println!("\n--- summary.md ---\n{summary}"),
+                None => println!("\nскилл не оставил summary.md"),
+            }
+            println!("изменения остались в рабочей копии — посмотри `git status`/`git diff`");
+        }
     }
 
-    print_artifacts(skill, &out_dir)?;
+    println!("лог: {}", log_path.display());
     Ok(())
+}
+
+/// Разворачивает ошибку шага в anyhow, подсказывая, где искать лог.
+fn finish<T>(step: llm_bot_core::Result<T>, log_path: &Path) -> Result<T> {
+    step.map_err(|err| anyhow::anyhow!("{err} (лог: {})", log_path.display()))
+}
+
+/// Печатает вывод агента по попыткам.
+fn print_runs(runs: &[llm_bot_core::RunResult]) {
+    for (i, run) in runs.iter().enumerate() {
+        if runs.len() > 1 {
+            println!("\n--- вывод агента, попытка {} ---", i + 1);
+        } else {
+            println!("\n--- вывод агента ---");
+        }
+        println!("{}", run.stdout.trim_end());
+        if !run.stderr.trim().is_empty() {
+            eprintln!("--- stderr ---\n{}", run.stderr.trim_end());
+        }
+    }
+}
+
+/// Восстанавливает команду в том виде, в каком её написал бы человек.
+fn command_line(skill: &str, args: &BTreeMap<String, String>) -> String {
+    let mut out = format!("/llm {skill}");
+    for (key, value) in args {
+        out.push_str(&format!(" {key}={value}"));
+    }
+    out
 }
 
 /// Собирает runner и спецификацию запуска.
@@ -120,7 +186,6 @@ fn build_runner(
     repo_path: &Path,
     skills_dir: &Path,
     out_dir: &Path,
-    prompt: String,
 ) -> Result<(Box<dyn Runner>, RunSpec)> {
     let model = if skill.contract.model.is_empty() {
         config.llm.default_model.clone()
@@ -166,7 +231,8 @@ fn build_runner(
             Mode::Review => Mount::ReadOnly,
             Mode::Patch => Mount::ReadWrite,
         },
-        prompt,
+        // Промпт подставляет шаг пайплайна: у повторной попытки он другой.
+        prompt: String::new(),
         tools: skill.contract.tools.clone(),
         provider: config.llm.default_provider.clone(),
         model: Some(model),
@@ -178,35 +244,6 @@ fn build_runner(
         agent_config,
     };
     Ok((runner, spec))
-}
-
-/// Показывает, что скилл положил в артефакты.
-fn print_artifacts(skill: &Skill, out_dir: &Path) -> Result<()> {
-    match skill.contract.mode {
-        Mode::Review => {
-            let path = out_dir.join(FINDINGS_FILE);
-            if !path.exists() {
-                bail!("скилл не записал {}", path.display());
-            }
-            println!(
-                "\n--- {} ---\n{}",
-                path.display(),
-                std::fs::read_to_string(&path)?
-            );
-        }
-        Mode::Patch => {
-            let summary = out_dir.join(SUMMARY_FILE);
-            if summary.exists() {
-                println!(
-                    "\n--- {} ---\n{}",
-                    summary.display(),
-                    std::fs::read_to_string(&summary)?
-                );
-            }
-            println!("изменения остались в рабочей копии — посмотри `git status`/`git diff`");
-        }
-    }
-    Ok(())
 }
 
 /// Файлы, с которыми будет работать скилл.

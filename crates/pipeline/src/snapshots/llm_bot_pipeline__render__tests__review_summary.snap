@@ -1,0 +1,22 @@
+---
+source: crates/pipeline/src/render.rs
+assertion_line: 251
+expression: "review_summary(&result, &ctx(\"/llm proofread\", \"proofread\"), 2)"
+---
+**`/llm proofread`** — проверено файлов: 2, замечаний: 4.
+
+В статье много пунктуационных ошибок и раздельного написания
+терминов с аббревиатурами.
+
+**Вне изменённых строк (1)** — привязать к строкам нельзя, поэтому здесь:
+
+- `posts/dns.md:420` _terminology_ — «MacOS» → «macOS»
+
+**Про файлы вне области скилла (1)**:
+
+- `astro.config.ts:10` _other_ — Файл вне области скилла
+
+Ещё 5 замечаний не показаны: сработал лимит на число комментариев.
+
+
+<sub>скилл `proofread` · job `1a2b3c4d`</sub>

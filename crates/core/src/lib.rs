@@ -19,3 +19,4 @@ pub use types::{
     AckState, CommentKind, CommentRef, Finding, Job, JobId, JobRef, JobStatus, Mount, Patch, PrRef,
     ReviewOutput, RunResult, RunSpec, Severity,
 };
+pub use uuid::Uuid;
