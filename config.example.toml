@@ -14,10 +14,12 @@ allowed_users = ["zhurik"]
 repos = []
 
 # Данные сервиса: SQLite, кэш репозиториев, worktree, логи джоб.
-data_dir = "data"
+# В docker-compose путь должен совпадать с хостовым (см. README): демон монтирует
+# рабочую копию в контейнер с pi и понимает только хостовые пути.
+data_dir = "/srv/llm-bot/data"
 
-# Каталог со скиллами (SKILL.md + skill.toml).
-skills_dir = "skills"
+# Каталог со скиллами (SKILL.md + skill.toml). Тоже монтируется в контейнер.
+skills_dir = "/srv/llm-bot/skills"
 
 # Сколько ждём завершения текущих джоб при остановке.
 shutdown_timeout = "5m"
@@ -43,6 +45,9 @@ runner_image = "llm-bot-runner:latest"
 cpu = 2.0
 memory_mb = 2048
 # host = "unix:///var/run/docker.sock"
+# Пользователь внутри контейнера с pi. Нужен, если uid сервиса на хосте
+# не совпадает с uid в образе: иначе pi не сможет писать в /out.
+# user = "1000:1000"
 
 [github]
 api_base = "https://api.github.com"

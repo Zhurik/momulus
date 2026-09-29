@@ -30,3 +30,15 @@ build-images:
 # Проверка контрактов скиллов
 skills-validate:
     cargo run -q -p llm-bot -- skills validate
+
+# Прогон скилла на локальной папке: just try proofread ~/Projects/blog file.md
+try skill repo files="":
+    cargo run -q -p llm-bot -- run --repo-path {{repo}} --skill {{skill}}         {{ if files == "" { "" } else { "--files " + files } }} --out ./out
+
+# Поднять сервис через compose (нужен .env с секретами)
+up:
+    docker compose --profile build build
+    docker compose up -d
+
+down:
+    docker compose down
