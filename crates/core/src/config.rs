@@ -65,6 +65,10 @@ pub struct LlmConfig {
     /// Модель по умолчанию; скилл может переопределить.
     #[serde(default = "default_model")]
     pub default_model: String,
+    /// Имя переменной окружения, в которой pi ждёт ключ провайдера.
+    /// Пусто — выводим из имени провайдера (anthropic -> ANTHROPIC_API_KEY).
+    #[serde(default)]
+    pub api_key_env: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -82,6 +86,11 @@ pub struct DockerConfig {
     /// Адрес демона; пусто — как в окружении (DOCKER_HOST или сокет по умолчанию).
     #[serde(default)]
     pub host: Option<String>,
+    /// Пользователь внутри контейнера ("1000:1000"); пусто — как в образе.
+    /// Нужен, когда uid сервиса на хосте не совпадает с uid в образе:
+    /// иначе pi не сможет писать в смонтированный /out.
+    #[serde(default)]
+    pub user: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -164,6 +173,7 @@ impl Default for LlmConfig {
         LlmConfig {
             default_provider: default_provider(),
             default_model: default_model(),
+            api_key_env: None,
         }
     }
 }
@@ -175,6 +185,7 @@ impl Default for DockerConfig {
             cpu: default_cpu(),
             memory_mb: default_memory_mb(),
             host: None,
+            user: None,
         }
     }
 }
@@ -196,6 +207,28 @@ impl Default for Limits {
             max_file_bytes: default_max_file_bytes(),
             max_changed_files: default_max_changed_files(),
         }
+    }
+}
+
+impl LlmConfig {
+    /// Имя переменной окружения с ключом провайдера.
+    pub fn api_key_env(&self) -> String {
+        if let Some(name) = &self.api_key_env {
+            return name.clone();
+        }
+        provider_key_env(&self.default_provider)
+    }
+}
+
+/// Переменная окружения, в которой pi ищет ключ конкретного провайдера.
+pub fn provider_key_env(provider: &str) -> String {
+    match provider {
+        "google" | "gemini" => "GEMINI_API_KEY".to_string(),
+        "azure-openai" => "AZURE_OPENAI_API_KEY".to_string(),
+        other => format!(
+            "{}_API_KEY",
+            other.to_ascii_uppercase().replace(['-', '.', ' '], "_")
+        ),
     }
 }
 
@@ -474,6 +507,29 @@ mod tests {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config.example.toml");
         let text = std::fs::read_to_string(&path).expect("config.example.toml exists");
         Config::from_toml(&text).expect("config.example.toml parses");
+    }
+
+    #[test]
+    fn provider_key_env_names() {
+        assert_eq!(provider_key_env("anthropic"), "ANTHROPIC_API_KEY");
+        assert_eq!(provider_key_env("openai"), "OPENAI_API_KEY");
+        assert_eq!(provider_key_env("google"), "GEMINI_API_KEY");
+        assert_eq!(provider_key_env("openrouter"), "OPENROUTER_API_KEY");
+        assert_eq!(provider_key_env("ant-ling"), "ANT_LING_API_KEY");
+    }
+
+    #[test]
+    fn api_key_env_can_be_overridden() {
+        let config = Config::from_toml(
+            r#"
+            allowed_users = ["zhurik"]
+            [llm]
+            default_provider = "my-proxy"
+            api_key_env = "PROXY_TOKEN"
+        "#,
+        )
+        .unwrap();
+        assert_eq!(config.llm.api_key_env(), "PROXY_TOKEN");
     }
 
     #[test]

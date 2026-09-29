@@ -18,9 +18,7 @@ async fn main() -> Result<()> {
         Commands::Serve { .. } => {
             anyhow::bail!("`serve` пока не реализован (этап 7)");
         }
-        Commands::Run(_) => {
-            anyhow::bail!("`run` пока не реализован (этап 4)");
-        }
+        Commands::Run(args) => commands::run::run(&cli, args).await,
         Commands::Skills { command } => commands::skills::run(&cli, command),
     }
 }

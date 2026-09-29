@@ -21,6 +21,15 @@ pub fn resolve_skills_dir(cli: &Cli) -> Result<PathBuf> {
     Ok(PathBuf::from("skills"))
 }
 
+/// Конфиг из файла, а если файла нет — разумные умолчания для локального прогона.
+pub fn load_config_or_default(cli: &Cli) -> Result<Config> {
+    if cli.config.exists() {
+        return Config::load(&cli.config)
+            .with_context(|| format!("конфиг {}", cli.config.display()));
+    }
+    Ok(Config::from_toml("allowed_users = [\"local\"]").expect("умолчания валидны"))
+}
+
 pub fn run(cli: &Cli, command: &SkillsCommand) -> Result<()> {
     let dir = resolve_skills_dir(cli)?;
     match command {

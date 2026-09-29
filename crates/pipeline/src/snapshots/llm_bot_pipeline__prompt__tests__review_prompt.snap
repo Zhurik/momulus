@@ -1,0 +1,113 @@
+---
+source: crates/pipeline/src/prompt.rs
+assertion_line: 180
+expression: ctx.render()
+---
+/skill:proofread
+
+Контекст: pull request #42 в репозитории acme/blog.
+Рабочая копия смонтирована в /work. Все пути ниже — относительно /work.
+
+Файлы, с которыми нужно работать:
+- posts/hello.mdx
+- posts/next.mdx
+
+## Что вернуть
+
+Запиши результат в файл /out/findings.json. Это единственный артефакт;
+в stdout ничего структурированного писать не нужно.
+
+Файл обязан быть валидным JSON по этой JSON Schema:
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReviewOutput",
+  "description": "Результат работы скилла в режиме review — ровно то, что пишет модель.",
+  "type": "object",
+  "properties": {
+    "findings": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Finding"
+      }
+    },
+    "summary": {
+      "description": "Краткое резюме ревью.",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "summary"
+  ],
+  "$defs": {
+    "Finding": {
+      "description": "Одно замечание модели, привязанное к строке файла.",
+      "type": "object",
+      "properties": {
+        "body": {
+          "description": "Текст замечания.",
+          "type": "string"
+        },
+        "line": {
+          "description": "Номер строки в новой версии файла (1-based).",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "path": {
+          "description": "Путь к файлу относительно корня репозитория.",
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/$defs/Severity"
+        },
+        "suggestion": {
+          "description": "Предлагаемая замена строки целиком, если применимо.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "line",
+        "severity",
+        "body"
+      ]
+    },
+    "Severity": {
+      "description": "Категория замечания.",
+      "type": "string",
+      "enum": [
+        "typo",
+        "grammar",
+        "punctuation",
+        "style",
+        "terminology",
+        "bug",
+        "security",
+        "other"
+      ]
+    }
+  }
+}
+```
+
+Правила:
+- `path` — путь относительно /work, ровно как в списке файлов выше;
+- `line` — номер строки в текущей (новой) версии файла, начиная с 1;
+- `severity` — одно из значений схемы;
+- `body` — короткое замечание на русском: что не так и что сделать;
+- `suggestion` — необязательная замена строки целиком, без markdown-обёртки
+  и без номера строки;
+- `summary` — 2–5 предложений: общая картина и то, что не уложилось в замечания;
+- не больше 5 замечаний; если нашёл больше — оставь самые важные
+  и скажи об остальных в `summary`;
+- если замечаний нет, верни пустой массив `findings` и напиши это в `summary`.
+
+Не пиши никаких других файлов и не меняй файлы в /work.

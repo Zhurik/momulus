@@ -24,6 +24,7 @@ fn unknown_subcommand_fails() {
 
 /// Каталог с одним валидным и одним битым скиллом.
 fn fixture_skills(dir: &std::path::Path, broken: bool) {
+    std::fs::create_dir_all(dir).unwrap();
     let ok = dir.join("proofread");
     std::fs::create_dir_all(&ok).unwrap();
     std::fs::write(
@@ -125,4 +126,136 @@ fn bundled_skills_are_valid() {
         .stdout(contains("proofread"))
         .stdout(contains("translate"))
         .stdout(contains("review"));
+}
+
+/// Мини-репозиторий со статьёй и каталог заготовленных артефактов.
+fn fixture_repo(dir: &std::path::Path) {
+    std::fs::create_dir_all(dir.join("posts")).unwrap();
+    std::fs::write(dir.join("posts/hello.mdx"), "# Привет\n\nтекст с ашибкой\n").unwrap();
+    std::fs::write(dir.join("Cargo.toml"), "не под фильтром\n").unwrap();
+}
+
+#[test]
+fn run_with_fake_runner_prints_findings() {
+    let tmp = tempfile::tempdir().unwrap();
+    let skills = tmp.path().join("skills");
+    fixture_skills(&skills, false);
+    let repo = tmp.path().join("repo");
+    fixture_repo(&repo);
+
+    let prepared = tmp.path().join("prepared");
+    std::fs::create_dir_all(&prepared).unwrap();
+    std::fs::write(
+        prepared.join("findings.json"),
+        r#"{"summary":"одна опечатка","findings":[{"path":"posts/hello.mdx","line":3,"severity":"typo","body":"ашибкой -> ошибкой"}]}"#,
+    )
+    .unwrap();
+
+    let out = tmp.path().join("out");
+    Command::cargo_bin("llm-bot")
+        .unwrap()
+        .args([
+            "--skills-dir",
+            skills.to_str().unwrap(),
+            "run",
+            "--repo-path",
+            repo.to_str().unwrap(),
+            "--skill",
+            "proofread",
+            "--out",
+            out.to_str().unwrap(),
+            "--fake-runner",
+            prepared.to_str().unwrap(),
+        ])
+        .assert()
+        .success()
+        .stdout(contains("скилл proofread (review)"))
+        .stdout(contains("файлов: 1"))
+        .stdout(contains("ашибкой -> ошибкой"));
+
+    assert!(out.join("findings.json").exists());
+    assert!(out.join("pi.log").exists(), "лог pi сохранён");
+}
+
+#[test]
+fn run_reports_when_nothing_matches_the_filter() {
+    let tmp = tempfile::tempdir().unwrap();
+    let skills = tmp.path().join("skills");
+    fixture_skills(&skills, false);
+    let repo = tmp.path().join("repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    std::fs::write(repo.join("main.rs"), "fn main() {}\n").unwrap();
+
+    Command::cargo_bin("llm-bot")
+        .unwrap()
+        .args([
+            "--skills-dir",
+            skills.to_str().unwrap(),
+            "run",
+            "--repo-path",
+            repo.to_str().unwrap(),
+            "--skill",
+            "proofread",
+            "--fake-runner",
+            tmp.path().to_str().unwrap(),
+        ])
+        .assert()
+        .success()
+        .stdout(contains("нечего делать"));
+}
+
+#[test]
+fn run_rejects_unknown_skill() {
+    let tmp = tempfile::tempdir().unwrap();
+    let skills = tmp.path().join("skills");
+    fixture_skills(&skills, false);
+    let repo = tmp.path().join("repo");
+    fixture_repo(&repo);
+
+    Command::cargo_bin("llm-bot")
+        .unwrap()
+        .args([
+            "--skills-dir",
+            skills.to_str().unwrap(),
+            "run",
+            "--repo-path",
+            repo.to_str().unwrap(),
+            "--skill",
+            "нет-такого",
+            "--fake-runner",
+            tmp.path().to_str().unwrap(),
+        ])
+        .assert()
+        .failure()
+        .stderr(contains("неизвестный скилл"));
+}
+
+#[test]
+fn run_fails_when_skill_produced_no_findings_file() {
+    let tmp = tempfile::tempdir().unwrap();
+    let skills = tmp.path().join("skills");
+    fixture_skills(&skills, false);
+    let repo = tmp.path().join("repo");
+    fixture_repo(&repo);
+    let empty = tmp.path().join("empty");
+    std::fs::create_dir_all(&empty).unwrap();
+
+    Command::cargo_bin("llm-bot")
+        .unwrap()
+        .args([
+            "--skills-dir",
+            skills.to_str().unwrap(),
+            "run",
+            "--repo-path",
+            repo.to_str().unwrap(),
+            "--skill",
+            "proofread",
+            "--out",
+            tmp.path().join("out").to_str().unwrap(),
+            "--fake-runner",
+            empty.to_str().unwrap(),
+        ])
+        .assert()
+        .failure()
+        .stderr(contains("findings.json"));
 }

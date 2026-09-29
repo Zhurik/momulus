@@ -1,0 +1,81 @@
+---
+source: crates/pipeline/src/prompt.rs
+assertion_line: 237
+expression: review_schema()
+---
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReviewOutput",
+  "description": "Результат работы скилла в режиме review — ровно то, что пишет модель.",
+  "type": "object",
+  "properties": {
+    "findings": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Finding"
+      }
+    },
+    "summary": {
+      "description": "Краткое резюме ревью.",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "summary"
+  ],
+  "$defs": {
+    "Finding": {
+      "description": "Одно замечание модели, привязанное к строке файла.",
+      "type": "object",
+      "properties": {
+        "body": {
+          "description": "Текст замечания.",
+          "type": "string"
+        },
+        "line": {
+          "description": "Номер строки в новой версии файла (1-based).",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "path": {
+          "description": "Путь к файлу относительно корня репозитория.",
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/$defs/Severity"
+        },
+        "suggestion": {
+          "description": "Предлагаемая замена строки целиком, если применимо.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "line",
+        "severity",
+        "body"
+      ]
+    },
+    "Severity": {
+      "description": "Категория замечания.",
+      "type": "string",
+      "enum": [
+        "typo",
+        "grammar",
+        "punctuation",
+        "style",
+        "terminology",
+        "bug",
+        "security",
+        "other"
+      ]
+    }
+  }
+}

@@ -1,0 +1,32 @@
+# Образ для LLM-шага: pi + минимальный набор утилит.
+# Собирается отдельно от сервиса и запускается на каждую джобу.
+FROM node:22-slim
+
+# Версия pi зафиксирована: обновление — осознанное действие.
+ARG PI_VERSION=0.87.1
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        git \
+        ripgrep \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN npm install -g "@earendil-works/pi-coding-agent@${PI_VERSION}" \
+    && npm cache clean --force
+
+# В образе node уже есть непривилегированный пользователь node (uid 1000).
+ENV HOME=/home/node \
+    PI_SKIP_VERSION_CHECK=1 \
+    PI_TELEMETRY=0 \
+    NODE_ENV=production
+
+# Каталоги монтирует оркестратор: /work (рабочая копия), /skills (ro), /out (артефакты).
+RUN mkdir -p /work /skills /out && chown node:node /work /out
+
+USER node
+WORKDIR /work
+
+# Команду целиком задаёт оркестратор.
+ENTRYPOINT []
+CMD ["pi", "--version"]

@@ -83,6 +83,10 @@ pub struct RunArgs {
     /// Куда класть артефакты (по умолчанию ./out).
     #[arg(long, default_value = "out")]
     pub out: PathBuf,
+
+    /// Вместо docker взять готовые артефакты из каталога (для тестов).
+    #[arg(long, hide = true)]
+    pub fake_runner: Option<PathBuf>,
 }
 
 #[derive(Debug, Subcommand)]

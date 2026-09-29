@@ -278,6 +278,8 @@ pub enum Mount {
 #[derive(Debug, Clone, PartialEq)]
 pub struct RunSpec {
     pub job_id: JobId,
+    /// Имя скилла: контейнер получает его каталог через `--skill /skills/<name>`.
+    pub skill: String,
     /// Хостовый путь рабочей копии, монтируется в /work.
     pub workdir: PathBuf,
     /// Хостовый путь каталога скиллов, монтируется в /skills (ro).
@@ -293,8 +295,10 @@ pub struct RunSpec {
     pub image: String,
     pub cpu_limit: f64,
     pub memory_limit_mb: u64,
-    /// Переменные окружения контейнера (только ключ LLM-провайдера и base URL).
+    /// Переменные окружения контейнера (только ключ LLM-провайдера).
     pub env: Vec<(String, String)>,
+    /// Содержимое `models.json` для pi, если провайдеру нужен свой base URL.
+    pub agent_config: Option<String>,
 }
 
 /// Что вернул LLM-шаг.

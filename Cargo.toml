@@ -4,6 +4,8 @@ members = [
     "crates/core",
     "crates/skills",
     "crates/workspace",
+    "crates/pipeline",
+    "crates/runner-docker",
     "crates/queue",
     "crates/llm-bot",
 ]
