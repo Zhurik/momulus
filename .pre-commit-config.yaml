@@ -1,0 +1,59 @@
+default_install_hook_types: [pre-commit, pre-push]
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: &keep_whitespace (\.snap$|^crates/workspace/src/diff\.rs$)
+      - id: mixed-line-ending
+        args: [--fix=lf]
+        exclude: *keep_whitespace
+      - id: end-of-file-fixer
+        exclude: \.snap$
+
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+
+      - id: check-added-large-files
+        args: [--maxkb=512]
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: detect-private-key
+        exclude: ^crates/github/tests/data/test-app-key\.pem$
+      - id: check-executables-have-shebangs
+      - id: forbid-submodules
+
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt
+        description: Formats the workspace; a changed file stops the commit.
+        entry: cargo fmt --all
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+      - id: cargo-clippy
+        name: cargo clippy
+        description: Lints every target with warnings denied.
+        entry: cargo clippy --all-targets --all-features -- -D warnings
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+      - id: cargo-test
+        name: cargo test
+        entry: cargo test --all-features
+        language: system
+        types: [rust]
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: skills-validate
+        name: skills validate
+        entry: cargo run -q -p momulus -- --skills-dir skills skills validate
+        language: system
+        files: ^skills/
+        pass_filenames: false

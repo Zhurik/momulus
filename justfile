@@ -27,6 +27,15 @@ build-images:
     docker build -f docker/Dockerfile.runner -t momulus-runner:latest .
     docker build -f docker/Dockerfile -t momulus:latest .
 
+# Install the git hooks (pre-commit and pre-push)
+hooks:
+    pre-commit install --install-hooks
+    pre-commit install --hook-type pre-push
+
+# Run every hook over the whole tree
+hooks-run:
+    pre-commit run --all-files
+
 # Validate the skill contracts
 skills-validate:
     cargo run -q -p momulus -- skills validate

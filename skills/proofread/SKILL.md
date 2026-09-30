@@ -47,4 +47,3 @@ that same language.
 
 <!-- PUT YOUR OWN PROOFREADING SKILL HERE -->
 <!-- Everything below this line is appended to the instructions above. -->
-
