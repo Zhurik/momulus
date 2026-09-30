@@ -1,6 +1,16 @@
 use assert_cmd::Command;
 use predicates::str::contains;
 
+/// The binary, started outside the project directory.
+///
+/// The service loads a `.env` from its working directory the way docker compose
+/// does; without this the developer's own `.env` would leak into the tests.
+fn momulus(cwd: &std::path::Path) -> Command {
+    let mut cmd = Command::cargo_bin("momulus").unwrap();
+    cmd.current_dir(cwd);
+    cmd
+}
+
 #[test]
 fn help_lists_subcommands() {
     Command::cargo_bin("momulus")
@@ -55,8 +65,7 @@ fn fixture_skills(dir: &std::path::Path, broken: bool) {
 fn skills_list_prints_registry() {
     let dir = tempfile::tempdir().unwrap();
     fixture_skills(dir.path(), false);
-    Command::cargo_bin("momulus")
-        .unwrap()
+    momulus(dir.path())
         .args([
             "--skills-dir",
             dir.path().to_str().unwrap(),
@@ -74,8 +83,7 @@ fn skills_list_prints_registry() {
 fn skills_validate_passes_on_good_contracts() {
     let dir = tempfile::tempdir().unwrap();
     fixture_skills(dir.path(), false);
-    Command::cargo_bin("momulus")
-        .unwrap()
+    momulus(dir.path())
         .args([
             "--skills-dir",
             dir.path().to_str().unwrap(),
@@ -91,8 +99,7 @@ fn skills_validate_passes_on_good_contracts() {
 fn skills_validate_fails_on_broken_contract() {
     let dir = tempfile::tempdir().unwrap();
     fixture_skills(dir.path(), true);
-    Command::cargo_bin("momulus")
-        .unwrap()
+    momulus(dir.path())
         .args([
             "--skills-dir",
             dir.path().to_str().unwrap(),
@@ -107,8 +114,8 @@ fn skills_validate_fails_on_broken_contract() {
 
 #[test]
 fn skills_validate_reports_missing_directory() {
-    Command::cargo_bin("momulus")
-        .unwrap()
+    let tmp = tempfile::tempdir().unwrap();
+    momulus(tmp.path())
         .args(["--skills-dir", "/definitely/not/here", "skills", "validate"])
         .assert()
         .failure()
@@ -118,8 +125,8 @@ fn skills_validate_reports_missing_directory() {
 #[test]
 fn bundled_skills_are_valid() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../skills");
-    Command::cargo_bin("momulus")
-        .unwrap()
+    let tmp = tempfile::tempdir().unwrap();
+    momulus(tmp.path())
         .args(["--skills-dir", root.to_str().unwrap(), "skills", "validate"])
         .assert()
         .success()
@@ -152,8 +159,7 @@ fn run_with_fake_runner_prints_findings() {
     .unwrap();
 
     let out = tmp.path().join("out");
-    Command::cargo_bin("momulus")
-        .unwrap()
+    momulus(tmp.path())
         .args([
             "--skills-dir",
             skills.to_str().unwrap(),
@@ -186,8 +192,7 @@ fn run_reports_when_nothing_matches_the_filter() {
     std::fs::create_dir_all(&repo).unwrap();
     std::fs::write(repo.join("main.rs"), "fn main() {}\n").unwrap();
 
-    Command::cargo_bin("momulus")
-        .unwrap()
+    momulus(tmp.path())
         .args([
             "--skills-dir",
             skills.to_str().unwrap(),
@@ -212,8 +217,7 @@ fn run_rejects_unknown_skill() {
     let repo = tmp.path().join("repo");
     fixture_repo(&repo);
 
-    Command::cargo_bin("momulus")
-        .unwrap()
+    momulus(tmp.path())
         .args([
             "--skills-dir",
             skills.to_str().unwrap(),
@@ -240,8 +244,7 @@ fn run_fails_when_skill_produced_no_findings_file() {
     let empty = tmp.path().join("empty");
     std::fs::create_dir_all(&empty).unwrap();
 
-    Command::cargo_bin("momulus")
-        .unwrap()
+    momulus(tmp.path())
         .args([
             "--skills-dir",
             skills.to_str().unwrap(),
@@ -262,8 +265,8 @@ fn run_fails_when_skill_produced_no_findings_file() {
 
 #[test]
 fn serve_reports_missing_config() {
-    Command::cargo_bin("momulus")
-        .unwrap()
+    let tmp = tempfile::tempdir().unwrap();
+    momulus(tmp.path())
         .args(["--config", "/definitely/not/here.toml", "serve"])
         .assert()
         .failure()
@@ -285,8 +288,7 @@ fn serve_reports_missing_github_secrets() {
     )
     .unwrap();
 
-    Command::cargo_bin("momulus")
-        .unwrap()
+    momulus(tmp.path())
         .args([
             "--config",
             config.to_str().unwrap(),
@@ -295,6 +297,7 @@ fn serve_reports_missing_github_secrets() {
             "serve",
         ])
         // The secret variables are deliberately empty.
+        .env_remove("GITHUB_TOKEN")
         .env_remove("GITHUB_APP_ID")
         .env_remove("GITHUB_APP_PRIVATE_KEY_PATH")
         .env("LLM_API_KEY", "test-key")
@@ -320,8 +323,7 @@ fn serve_requires_base_url_for_custom_provider() {
     )
     .unwrap();
 
-    Command::cargo_bin("momulus")
-        .unwrap()
+    momulus(tmp.path())
         .args([
             "--config",
             config.to_str().unwrap(),
@@ -352,8 +354,7 @@ fn serve_accepts_a_builtin_provider_without_base_url() {
 
     // The default provider is built into pi, so the run gets as far as the
     // missing GitHub credentials rather than complaining about the endpoint.
-    Command::cargo_bin("momulus")
-        .unwrap()
+    momulus(tmp.path())
         .args([
             "--config",
             config.to_str().unwrap(),
@@ -362,9 +363,131 @@ fn serve_accepts_a_builtin_provider_without_base_url() {
             "serve",
         ])
         .env_remove("LLM_BASE_URL")
+        .env_remove("GITHUB_TOKEN")
         .env_remove("GITHUB_APP_ID")
         .env("LLM_API_KEY", "test-key")
         .assert()
         .failure()
         .stderr(contains("GITHUB_APP_ID"));
+}
+
+/// A config with the given extra lines and a temporary data directory.
+fn config_with(tmp: &std::path::Path, extra: &str) -> std::path::PathBuf {
+    let path = tmp.join("config.toml");
+    std::fs::write(
+        &path,
+        format!(
+            "allowed_users = [\"zhurik\"]\ndata_dir = {:?}\n{extra}",
+            tmp.join("data").to_string_lossy()
+        ),
+    )
+    .unwrap();
+    path
+}
+
+#[test]
+fn serve_without_any_github_credentials_lists_both_ways() {
+    let tmp = tempfile::tempdir().unwrap();
+    let skills = tmp.path().join("skills");
+    fixture_skills(&skills, false);
+    let config = config_with(tmp.path(), "");
+
+    momulus(tmp.path())
+        .args([
+            "--config",
+            config.to_str().unwrap(),
+            "--skills-dir",
+            skills.to_str().unwrap(),
+            "serve",
+        ])
+        .env_remove("GITHUB_TOKEN")
+        .env_remove("GITHUB_APP_ID")
+        .env_remove("GITHUB_APP_PRIVATE_KEY_PATH")
+        .env("LLM_API_KEY", "test-key")
+        .assert()
+        .failure()
+        .stderr(contains("GITHUB_TOKEN"))
+        .stderr(contains("GITHUB_APP_ID"));
+}
+
+#[test]
+fn serve_with_a_token_requires_the_repo_allowlist() {
+    let tmp = tempfile::tempdir().unwrap();
+    let skills = tmp.path().join("skills");
+    fixture_skills(&skills, false);
+    // No `repos` in the config: a token cannot discover repositories itself.
+    let config = config_with(tmp.path(), "");
+
+    momulus(tmp.path())
+        .args([
+            "--config",
+            config.to_str().unwrap(),
+            "--skills-dir",
+            skills.to_str().unwrap(),
+            "serve",
+        ])
+        .env("GITHUB_TOKEN", "ghp_test_token")
+        .env("LLM_API_KEY", "test-key")
+        .assert()
+        .failure()
+        .stderr(contains("repos"));
+}
+
+#[test]
+fn serve_with_half_an_app_says_which_half_is_missing() {
+    let tmp = tempfile::tempdir().unwrap();
+    let skills = tmp.path().join("skills");
+    fixture_skills(&skills, false);
+    let config = config_with(tmp.path(), "");
+
+    momulus(tmp.path())
+        .args([
+            "--config",
+            config.to_str().unwrap(),
+            "--skills-dir",
+            skills.to_str().unwrap(),
+            "serve",
+        ])
+        .env_remove("GITHUB_TOKEN")
+        .env_remove("GITHUB_APP_PRIVATE_KEY_PATH")
+        .env("GITHUB_APP_ID", "123456")
+        .env("LLM_API_KEY", "test-key")
+        .assert()
+        .failure()
+        .stderr(contains("GITHUB_APP_PRIVATE_KEY_PATH"));
+}
+
+#[test]
+fn env_overrides_the_data_directory() {
+    let tmp = tempfile::tempdir().unwrap();
+    let skills = tmp.path().join("skills");
+    fixture_skills(&skills, false);
+    // The config points at a path that does not exist; the override wins, so the
+    // run gets as far as the missing credentials instead of a filesystem error.
+    let config = config_with(tmp.path(), "");
+    std::fs::write(
+        &config,
+        "allowed_users = [\"zhurik\"]\ndata_dir = \"/definitely/not/writable\"\n",
+    )
+    .unwrap();
+
+    momulus(tmp.path())
+        .args([
+            "--config",
+            config.to_str().unwrap(),
+            "--skills-dir",
+            skills.to_str().unwrap(),
+            "serve",
+        ])
+        .env(
+            "MOMULUS_DATA_DIR",
+            tmp.path().join("data").to_str().unwrap(),
+        )
+        .env_remove("GITHUB_TOKEN")
+        .env_remove("GITHUB_APP_ID")
+        .env_remove("GITHUB_APP_PRIVATE_KEY_PATH")
+        .env("LLM_API_KEY", "test-key")
+        .assert()
+        .failure()
+        .stderr(contains("GITHUB_TOKEN"));
 }

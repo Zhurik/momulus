@@ -35,10 +35,13 @@ skills-validate:
 try skill repo files="":
     cargo run -q -p momulus -- run --repo-path {{repo}} --skill {{skill}}         {{ if files == "" { "" } else { "--files " + files } }} --out ./out
 
-# Bring the service up with compose (needs a .env with the secrets)
+# Bring the service up with compose (reads .env from this directory)
 up:
+    @test -f .env || (echo "no .env yet: cp .env.example .env and fill it in" && exit 1)
+    mkdir -p data
     docker compose --profile build build
     docker compose up -d
+    @echo "started; follow the logs with: docker compose logs -f momulus"
 
 down:
     docker compose down

@@ -91,11 +91,94 @@ impl GitAccess for GithubApp {
     }
 
     fn refspecs(&self, pr: &PrRef) -> Vec<String> {
-        // The PR head lives in refs/pull/<n>/head — this works for forks too;
-        // the base branch is needed to compute the diff.
-        vec![
-            format!("+refs/pull/{n}/head:refs/pull/{n}/head", n = pr.number),
-            format!("+refs/heads/{base}:refs/heads/{base}", base = pr.base_ref),
-        ]
+        pr_refspecs(pr)
+    }
+}
+
+/// What has to be fetched to get a GitHub PR's head and its base branch.
+///
+/// The PR head lives in `refs/pull/<n>/head` — this works for forks too; the
+/// base branch is needed to compute the diff.
+pub fn pr_refspecs(pr: &PrRef) -> Vec<String> {
+    vec![
+        format!("+refs/pull/{n}/head:refs/pull/{n}/head", n = pr.number),
+        format!("+refs/heads/{base}:refs/heads/{base}", base = pr.base_ref),
+    ]
+}
+
+/// Git access through a fixed token — the personal access token setup.
+#[derive(Debug, Clone)]
+pub struct StaticGitAccess {
+    token: Option<String>,
+}
+
+impl StaticGitAccess {
+    pub fn new(token: impl Into<String>) -> StaticGitAccess {
+        StaticGitAccess {
+            token: Some(token.into()),
+        }
+    }
+
+    /// No credentials at all — for local remotes in tests.
+    pub fn anonymous() -> StaticGitAccess {
+        StaticGitAccess { token: None }
+    }
+}
+
+#[async_trait]
+impl GitAccess for StaticGitAccess {
+    async fn git_token(&self, _pr: &PrRef) -> Result<Option<String>> {
+        Ok(self.token.clone())
+    }
+
+    fn refspecs(&self, pr: &PrRef) -> Vec<String> {
+        pr_refspecs(pr)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn pr() -> PrRef {
+        PrRef {
+            platform: "github".into(),
+            owner: "acme".into(),
+            repo: "blog".into(),
+            number: 42,
+            head_sha: "abc".into(),
+            head_ref: "feature".into(),
+            base_ref: "main".into(),
+            head_repo: "acme/blog".into(),
+            clone_url: "https://github.com/acme/blog.git".into(),
+        }
+    }
+
+    #[tokio::test]
+    async fn static_access_hands_out_the_token_and_the_same_refspecs() {
+        let access = StaticGitAccess::new("ghp_token");
+        assert_eq!(
+            access.git_token(&pr()).await.unwrap().as_deref(),
+            Some("ghp_token")
+        );
+        assert_eq!(
+            access.refspecs(&pr()),
+            vec![
+                "+refs/pull/42/head:refs/pull/42/head".to_string(),
+                "+refs/heads/main:refs/heads/main".to_string(),
+            ]
+        );
+        assert_eq!(access.base_rev(&pr()), "refs/heads/main");
+    }
+
+    #[tokio::test]
+    async fn anonymous_access_has_no_token() {
+        assert!(
+            StaticGitAccess::anonymous()
+                .git_token(&pr())
+                .await
+                .unwrap()
+                .is_none()
+        );
     }
 }

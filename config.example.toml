@@ -1,5 +1,6 @@
 # Example momulus configuration. Secrets do not belong here — they come from the
-# environment: GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY_PATH, LLM_API_KEY, LLM_BASE_URL.
+# environment (see .env.example): GITHUB_TOKEN or GITHUB_APP_ID +
+# GITHUB_APP_PRIVATE_KEY_PATH, plus LLM_API_KEY and optionally LLM_BASE_URL.
 
 # How often we poll GitHub for new commands.
 poll_interval = "45s"
@@ -10,16 +11,19 @@ concurrency = 1
 # Who may issue commands. Comments from anyone else are ignored silently.
 allowed_users = ["your-github-login"]
 
-# Optional repository allowlist. Empty means every repository of the installation.
-repos = []
+# Repository allowlist. Optional with a GitHub App (it discovers its own
+# installations), REQUIRED with a personal access token — a token cannot list
+# repositories for us.
+repos = ["owner/repo"]
 
 # Service data: SQLite, the repository cache, worktrees and job logs.
-# Under docker-compose this path must match the host path (see README): the daemon
-# mounts the working copy into the pi container and only understands host paths.
-data_dir = "/srv/momulus/data"
+# Relative paths are fine for a local run. Under docker-compose these two are
+# overridden by MOMULUS_DATA_DIR/MOMULUS_SKILLS_DIR, so they always match the host
+# paths the docker daemon needs — no need to edit them here.
+data_dir = "data"
 
 # Skills directory (SKILL.md + skill.toml). It is mounted into the container too.
-skills_dir = "/srv/momulus/skills"
+skills_dir = "skills"
 
 # How long we wait for running jobs on shutdown.
 shutdown_timeout = "5m"

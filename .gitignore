@@ -4,3 +4,4 @@
 *.pem
 config.toml
 .env
+!.env.example

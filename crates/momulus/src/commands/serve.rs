@@ -2,11 +2,15 @@
 
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
+use momulus_core::config::GithubAuth;
 use momulus_core::{AckState, Config, Error, GitAccess, Job, Publisher, Runner, Secrets, Trigger};
 use momulus_github::trigger::ClientSource;
-use momulus_github::{AppAuth, GithubApp, GithubPublisher, GithubTrigger, TriggerConfig};
+use momulus_github::{
+    AppAuth, ClientProvider, FixedClient, GithubApp, GithubPublisher, GithubTrigger,
+    StaticGitAccess, TriggerConfig,
+};
 use momulus_pipeline::{Outcome, Pipeline, PipelineConfig, SharedRegistry, StdoutPublisher};
 use momulus_queue::{Db, JobHandler, Store, Worker, WorkerConfig};
 use momulus_runner_docker::DockerRunner;
@@ -47,10 +51,47 @@ pub async fn run(cli: &Cli, dry_run: bool) -> Result<()> {
     let git = Git::new(redactor.clone());
     let cache = RepoCache::new(config.repos_dir(), git.clone());
 
-    // App authentication: both API clients and git tokens grow out of it.
-    let (app_id, key_path) = secrets.require_github()?;
-    let auth = AppAuth::from_key_path(app_id, &key_path, &config.github.api_base)?;
-    let app = GithubApp::new(auth.clone());
+    // Either a personal access token or a GitHub App; the token wins when both
+    // are present. Both paths produce the same three things: an API client per
+    // repository, git credentials, and the trigger's source of repositories.
+    let auth_mode = secrets.github_auth()?;
+    let (clients, access, client_source): (
+        Arc<dyn ClientProvider>,
+        Arc<dyn GitAccess>,
+        ClientSource,
+    ) = match &auth_mode {
+        GithubAuth::Token(token) => {
+            if config.repos.is_empty() {
+                bail!(
+                    "a personal access token cannot list its own repositories: \
+                     set `repos = [\"owner/repo\", ...]` in {}",
+                    cli.config.display()
+                );
+            }
+            tracing::info!(repos = ?config.repos, "authenticating with a personal access token");
+            let client = octocrab::Octocrab::builder()
+                .add_retry_config(octocrab::service::middleware::retry::RetryConfig::None)
+                .base_uri(&config.github.api_base)
+                .context("github.api_base")?
+                .user_access_token(token.clone())
+                .build()
+                .context("building the GitHub client")?;
+            (
+                Arc::new(FixedClient(client.clone())),
+                Arc::new(StaticGitAccess::new(token.clone())),
+                ClientSource::Fixed {
+                    client,
+                    repos: config.repos.clone(),
+                },
+            )
+        }
+        GithubAuth::App { app_id, key_path } => {
+            tracing::info!(app_id, "authenticating as a GitHub App");
+            let auth = AppAuth::from_key_path(*app_id, key_path, &config.github.api_base)?;
+            let app = GithubApp::new(auth.clone());
+            (app.clone(), app.clone(), ClientSource::App(auth))
+        }
+    };
 
     let runner: Arc<dyn Runner> = Arc::new(DockerRunner::connect(
         config.docker.host.as_deref(),
@@ -59,16 +100,12 @@ pub async fn run(cli: &Cli, dry_run: bool) -> Result<()> {
     )?);
     runner_check(runner.as_ref(), &config).await;
 
-    // The git token always comes from the App, even in dry-run mode: fetching
-    // the working copy is needed there too.
-    let access: Arc<dyn GitAccess> = app.clone();
-
     let publisher: Arc<dyn Publisher> = if dry_run {
         tracing::warn!("--dry-run mode: nothing will be published");
         Arc::new(StdoutPublisher::new())
     } else {
         Arc::new(GithubPublisher::new(
-            app.clone(),
+            clients,
             git.clone(),
             config.github.clone(),
             access.clone(),
@@ -104,7 +141,7 @@ pub async fn run(cli: &Cli, dry_run: bool) -> Result<()> {
             allowed_users: config.allowed_users.clone(),
             repos: config.repos.clone(),
         },
-        ClientSource::App(auth),
+        client_source,
         Arc::new(store.clone()),
         registry.clone(),
     );

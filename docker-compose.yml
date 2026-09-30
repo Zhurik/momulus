@@ -1,18 +1,13 @@
 # Deploying momulus on a single machine.
 #
+# Quick start:
+#   cp .env.example .env     # fill in GITHUB_TOKEN and LLM_API_KEY
+#   just up                  # builds the pi runner image and starts the service
+#
 # Host and container paths are identical on purpose: the service asks the docker
 # daemon to mount the working copy into the pi container, and the daemon lives on
-# the host and only sees host paths. That is why data_dir and skills_dir are
-# absolute and mounted onto themselves.
-#
-# Before the first run:
-#   export MOMULUS_ROOT=/srv/momulus          # holds data/, skills/, config.toml
-#   mkdir -p $MOMULUS_ROOT/{data,secrets}
-#   cp config.example.toml $MOMULUS_ROOT/config.toml
-#   cp -r skills $MOMULUS_ROOT/skills
-#   cp ~/github-app.private-key.pem $MOMULUS_ROOT/secrets/github-app.pem
-#   docker compose --profile build build      # build the pi runner image
-#   docker compose up -d
+# the host and only sees host paths. MOMULUS_ROOT defaults to the directory this
+# file sits in, so a checkout works as is.
 
 services:
   momulus:
@@ -21,20 +16,27 @@ services:
       dockerfile: docker/Dockerfile
     image: momulus:latest
     restart: unless-stopped
-    # Needs access to the docker daemon: the service starts one pi container per
-    # job. That is effectively root on the host — the README describes the
-    # docker-socket-proxy variant, which narrows the allowed endpoints down.
+    depends_on:
+      - docker-proxy
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ${MOMULUS_ROOT:-/srv/momulus}/data:${MOMULUS_ROOT:-/srv/momulus}/data
-      - ${MOMULUS_ROOT:-/srv/momulus}/skills:${MOMULUS_ROOT:-/srv/momulus}/skills:ro
-      - ${MOMULUS_ROOT:-/srv/momulus}/config.toml:/etc/momulus/config.toml:ro
-    secrets:
-      - github_app_key
+      - ${MOMULUS_ROOT:-${PWD}}/data:${MOMULUS_ROOT:-${PWD}}/data
+      - ${MOMULUS_ROOT:-${PWD}}/skills:${MOMULUS_ROOT:-${PWD}}/skills:ro
+      - ${MOMULUS_ROOT:-${PWD}}/config.toml:/etc/momulus/config.toml:ro
     environment:
+      # The service starts one pi container per job. It talks to the daemon
+      # through the proxy below instead of mounting the socket: the socket is
+      # root-owned, and an unprivileged service cannot read it anyway.
+      DOCKER_HOST: tcp://docker-proxy:2375
       MOMULUS_CONFIG: /etc/momulus/config.toml
-      GITHUB_APP_ID: ${GITHUB_APP_ID:?the GitHub App id is required}
-      GITHUB_APP_PRIVATE_KEY_PATH: /run/secrets/github_app_key
+      # The paths live here only, so config.toml never disagrees with the mounts.
+      MOMULUS_DATA_DIR: ${MOMULUS_ROOT:-${PWD}}/data
+      MOMULUS_SKILLS_DIR: ${MOMULUS_ROOT:-${PWD}}/skills
+      # Either a personal access token (simplest) ...
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      # ... or a GitHub App. For the App, add the override file that mounts the
+      # private key:
+      #   docker compose -f docker-compose.yml -f docker-compose.app-auth.yml up -d
+      GITHUB_APP_ID: ${GITHUB_APP_ID:-}
       LLM_API_KEY: ${LLM_API_KEY:?the LLM provider key is required}
       # Only needed for an OpenAI-compatible gateway; leave unset for a provider
       # pi already knows (openai, anthropic, google, ...).
@@ -46,6 +48,23 @@ services:
     mem_limit: 512m
     cpus: 1.0
 
+  # A narrow gateway to the docker daemon: only the endpoints the runner needs.
+  # Mounting /var/run/docker.sock straight into the service would be both
+  # root-on-the-host and unreadable for its unprivileged user.
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    restart: unless-stopped
+    environment:
+      CONTAINERS: 1   # create, start, wait, logs, kill, remove
+      IMAGES: 1       # inspect the runner image
+      POST: 1         # without it nothing can be created
+      # everything else (VOLUMES, NETWORKS, EXEC, SWARM, INFO, ...) stays off
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    # Not published to the host: only the service on this network reaches it.
+    expose:
+      - "2375"
+
   # Builds the image with pi. Never started: `docker compose --profile build build`.
   runner-image:
     build:
@@ -56,7 +75,3 @@ services:
     image: momulus-runner:latest
     profiles: ["build"]
     command: ["pi", "--version"]
-
-secrets:
-  github_app_key:
-    file: ${MOMULUS_ROOT:-/srv/momulus}/secrets/github-app.pem

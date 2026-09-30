@@ -41,11 +41,12 @@ impl std::fmt::Debug for DockerRunner {
 impl DockerRunner {
     /// Connects to the daemon: at the configured address or the default one.
     pub fn connect(host: Option<&str>, user: Option<String>, redactor: Redactor) -> Result<Self> {
+        // connect_with_host understands every scheme we may be given:
+        // unix:// for a mounted socket, tcp:// for a socket proxy.
         let docker = match host {
-            Some(host) if !host.is_empty() => {
-                Docker::connect_with_socket(host, 120, bollard::API_DEFAULT_VERSION)
-                    .map_err(|e| Error::Runner(format!("docker {host}: {e}")))?
-            }
+            Some(host) if !host.is_empty() => Docker::connect_with_host(host)
+                .map_err(|e| Error::Runner(format!("docker {host}: {e}")))?,
+            // Falls back to DOCKER_HOST, then to the platform default socket.
             _ => Docker::connect_with_defaults()
                 .map_err(|e| Error::Runner(format!("docker: {e}")))?,
         };

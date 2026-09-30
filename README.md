@@ -78,6 +78,65 @@ You get `./out/findings.json` (the findings) and `./out/pi.log` (the agent's
 full output). For patch skills the edits stay in the working copy — inspect them
 with `git diff`.
 
+## Start in one command
+
+```bash
+cp .env.example .env     # fill in GITHUB_TOKEN and LLM_API_KEY
+just up                  # builds the pi runner image and starts the service
+docker compose logs -f momulus
+```
+
+`docker compose` reads `.env` from the project directory on its own, and so does
+the binary itself — `cargo run -p momulus -- serve` picks up the same file, no
+`source .env` needed (variables already in the environment win). `MOMULUS_ROOT`
+defaults to that same directory — so a fresh checkout works with
+two filled-in variables and nothing else. `data/` is created on the spot,
+`skills/` and `config.toml` are taken from the checkout.
+
+The paths that must match between host and container (`data`, `skills`) are set
+by `docker-compose.yml` through `MOMULUS_DATA_DIR`/`MOMULUS_SKILLS_DIR`, which
+override whatever `config.toml` says. That way the two can never disagree — a
+mismatch used to break the runner's mounts in a confusing way.
+
+## Token or App
+
+Two ways to authenticate; the token is the quick one, the App is the tidy one.
+If both are configured, the token wins.
+
+| | Personal access token | GitHub App |
+|---|---|---|
+| setup | one variable, ~1 minute | register in the web UI, install on the repos, ~5 minutes |
+| reviews and PRs come from | you | `momulus[bot]`, its own identity |
+| token lifetime | until it expires | installation token for an hour, refreshed automatically |
+| API rate limit | shared with your account | its own, per installation |
+| repository discovery | none: `repos` in the config must list them | finds its installations itself, `repos` optional |
+| extra files | none | a `.pem` private key on disk |
+
+**Token.** Create a fine-grained token at
+https://github.com/settings/personal-access-tokens with Contents RW, Pull
+requests RW, Issues RW and Metadata R on the repositories you want, then:
+
+```bash
+GITHUB_TOKEN=github_pat_...
+```
+
+and list those repositories in `config.toml`:
+
+```toml
+repos = ["owner/repo"]
+```
+
+**App.** Register it (see below), put the private key at
+`${MOMULUS_ROOT}/secrets/github-app.pem`, set `GITHUB_APP_ID` in `.env`, leave
+`GITHUB_TOKEN` empty and start with the overlay that mounts the key:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.app-auth.yml up -d
+```
+
+Whichever you pick, the service says exactly what is missing at startup instead
+of failing somewhere in the middle.
+
 ## Creating the GitHub App
 
 1. **Settings → Developer settings → GitHub Apps → New GitHub App.**
@@ -133,10 +192,12 @@ Secrets come from the environment only:
 
 | Variable | Meaning |
 |---|---|
-| `GITHUB_APP_ID` | GitHub App id |
-| `GITHUB_APP_PRIVATE_KEY_PATH` | path to the App's `.pem` key |
+| `GITHUB_TOKEN` | personal access token — the simple alternative to an App |
+| `GITHUB_APP_ID` | GitHub App id (not needed with a token) |
+| `GITHUB_APP_PRIVATE_KEY_PATH` | path to the App's `.pem` key (not needed with a token) |
 | `LLM_API_KEY` | LLM provider key |
 | `LLM_BASE_URL` | provider API base — only for an OpenAI-compatible gateway (e.g. `https://openrouter.ai/api/v1`) |
+| `MOMULUS_DATA_DIR`, `MOMULUS_SKILLS_DIR` | override `data_dir`/`skills_dir` from the config; set by docker-compose |
 
 ### Providers pi does not know
 
@@ -170,24 +231,22 @@ refuses to start and says exactly that.
 
 ## Deploying with docker-compose
 
+Running from the checkout needs nothing but `.env` (see "Start in one command").
+To keep the service somewhere else — say `/srv/momulus` on a mini PC:
+
 ```bash
 export MOMULUS_ROOT=/srv/momulus
-mkdir -p $MOMULUS_ROOT/{data,secrets}
-cp config.example.toml $MOMULUS_ROOT/config.toml   # adjust paths and allowed_users
+mkdir -p $MOMULUS_ROOT/data
+cp config.example.toml $MOMULUS_ROOT/config.toml   # adjust allowed_users and repos
 cp -r skills $MOMULUS_ROOT/skills
-cp ~/github-app.private-key.pem $MOMULUS_ROOT/secrets/github-app.pem
+cp .env.example $MOMULUS_ROOT/../momulus/.env      # next to docker-compose.yml
 
-cat > .env <<'ENV'
-MOMULUS_ROOT=/srv/momulus
-GITHUB_APP_ID=123456
-LLM_API_KEY=...
-# LLM_BASE_URL=https://openrouter.ai/api/v1   # only for a custom gateway
-ENV
-
-docker compose --profile build build   # the pi runner image
-docker compose up -d
-docker compose logs -f momulus
+# add MOMULUS_ROOT=/srv/momulus to that .env, then
+just up
 ```
+
+On macOS keep everything under `/Users`: Docker Desktop shares that path with the
+daemon, `/srv` it does not.
 
 ### Why host and container paths are identical
 
@@ -198,37 +257,35 @@ absolute and mounted onto themselves (`/srv/momulus/data:/srv/momulus/data`).
 Mount them anywhere else and the runner receives a path that does not exist on
 the host.
 
-### The docker.sock risk
+### How the service reaches the docker daemon
 
-Exposing `/var/run/docker.sock` to a container is effectively root on the host:
-whoever can create containers can mount `/` and step outside. The service is
-written so that the model's container receives no GitHub token and nothing
-beyond the provider key, but the socket access itself stays powerful.
+The service starts one pi container per job, so it needs the docker API. Mounting
+`/var/run/docker.sock` straight into it has two problems: the socket is owned by
+root, so the service's unprivileged user cannot even read it, and full socket
+access is effectively root on the host.
 
-A calmer option is [docker-socket-proxy](https://github.com/Tecnativa/docker-socket-proxy),
-which only forwards the endpoints you allow:
+`docker-compose.yml` therefore ships a
+[docker-socket-proxy](https://github.com/Tecnativa/docker-socket-proxy) that
+forwards only what the runner needs:
 
 ```yaml
-services:
-  docker-proxy:
-    image: tecnativa/docker-socket-proxy:latest
-    environment:
-      CONTAINERS: 1      # create/start/wait/logs/kill/remove
-      IMAGES: 1          # inspect the runner image
-      POST: 1            # without it containers cannot be created
-      # everything else (VOLUMES, NETWORKS, EXEC, SWARM, INFO...) stays off
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    restart: unless-stopped
-
-  momulus:
-    environment:
-      DOCKER_HOST: tcp://docker-proxy:2375
-    # and drop the /var/run/docker.sock mount
+docker-proxy:
+  image: tecnativa/docker-socket-proxy:0.3.0
+  environment:
+    CONTAINERS: 1   # create, start, wait, logs, kill, remove
+    IMAGES: 1       # inspect the runner image
+    POST: 1         # without it nothing can be created
+    # everything else (VOLUMES, NETWORKS, EXEC, SWARM, INFO, ...) stays off
 ```
 
-This is not full isolation (the right to create containers with bind mounts
-remains), but it removes everything unnecessary and leaves an auditable gateway.
+The service talks to it over `DOCKER_HOST=tcp://docker-proxy:2375`; the proxy port
+is never published to the host. This is not full isolation — the right to create
+containers with bind mounts remains — but it removes everything unnecessary and
+leaves one auditable gateway.
+
+To go back to the plain socket (and accept both problems above), drop the proxy
+service, mount `/var/run/docker.sock` into `momulus` and remove `DOCKER_HOST`;
+the service will then need to run as a user that can read the socket.
 
 ## How it works inside
 
@@ -275,6 +332,12 @@ momulus skills validate              # check the contracts
 
 Global flags: `--config`, `--skills-dir`, `--log-format text|json`,
 `--log-level`.
+
+`serve` needs no local clone of anything: it clones each repository itself into
+`data/repos/<owner>/<repo>.git` and creates a throwaway `git worktree` at the PR
+head for every job. `run --repo-path` is a different thing entirely — a debugging
+mode that mounts a directory you already have as `/work`, so you can iterate on a
+skill or a prompt without GitHub in the loop.
 
 `SIGHUP` reloads the skills directory on a running service (if a new contract is
 broken, the previous registry stays in place). `SIGTERM`/`SIGINT` shut it down:

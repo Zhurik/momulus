@@ -8,7 +8,7 @@ pub mod models;
 pub mod publisher;
 pub mod trigger;
 
-pub use app::{ClientProvider, FixedClient, GithubApp};
+pub use app::{ClientProvider, FixedClient, GithubApp, StaticGitAccess, pr_refspecs};
 pub use auth::AppAuth;
 pub use publisher::GithubPublisher;
 pub use trigger::{ClientSource, GithubTrigger, TriggerConfig};
