@@ -122,13 +122,17 @@ impl AppAuth {
 mod tests {
     use super::*;
 
-    /// A test RSA key (unit tests only; it protects nothing).
-    const TEST_KEY: &str = include_str!("../tests/data/test-app-key.pem");
+    use crate::testkey::test_app_key_pem;
 
     // The octocrab client builds a tower service, which needs a tokio reactor.
     #[tokio::test]
     async fn builds_app_client_from_pem() {
-        let auth = AppAuth::new(12345, TEST_KEY.as_bytes(), "https://api.github.com").unwrap();
+        let auth = AppAuth::new(
+            12345,
+            test_app_key_pem().as_bytes(),
+            "https://api.github.com",
+        )
+        .unwrap();
         assert!(auth.installation_client(42).is_ok());
     }
 

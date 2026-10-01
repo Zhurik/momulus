@@ -55,6 +55,12 @@ uuid = { version = "1.26.1", features = ["v4", "serde"] }
 assert_cmd = "2.2.2"
 insta = { version = "1.48.0", features = ["json", "redactions"] }
 predicates = "3"
+# Generates the throwaway RSA key the App-auth tests need; already in the tree
+# through jsonwebtoken, so this adds no new third-party code. It speaks
+# rand_core 0.6, a generation older than the rand 0.10 used elsewhere, hence the
+# separate entry for its RNG.
+rsa = { version = "0.9.10", features = ["std"] }
+rand_core_06 = { package = "rand_core", version = "0.6.4", features = ["getrandom"] }
 tempfile = "3.27.0"
 wiremock = "0.6.5"
 

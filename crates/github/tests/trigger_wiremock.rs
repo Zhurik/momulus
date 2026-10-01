@@ -512,7 +512,7 @@ async fn app_mode_discovers_repositories_of_installations() {
         .await;
     mock_empty_review_comments(&server).await;
 
-    let key = include_str!("data/test-app-key.pem");
+    let key = momulus_github::testkey::test_app_key_pem();
     let auth = momulus_github::AppAuth::new(12345, key.as_bytes(), &server.uri()).unwrap();
     let trigger = GithubTrigger::new(
         TriggerConfig {

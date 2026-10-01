@@ -1,6 +1,9 @@
 /target
 /data
 /out
+# Private keys never belong in the repository. The App-auth tests generate a
+# throwaway key at runtime (crates/github/src/testkey.rs), so there is no test
+# key here to exempt.
 *.pem
 config.toml
 .env

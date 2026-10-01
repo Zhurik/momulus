@@ -8,6 +8,10 @@ pub mod models;
 pub mod publisher;
 pub mod trigger;
 
+/// Test helpers, exposed so the crate's own integration tests can reuse them.
+#[cfg(any(test, feature = "test-support"))]
+pub mod testkey;
+
 pub use app::{ClientProvider, FixedClient, GithubApp, StaticGitAccess, pr_refspecs};
 pub use auth::AppAuth;
 pub use publisher::GithubPublisher;

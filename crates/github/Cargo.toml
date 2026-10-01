@@ -5,6 +5,10 @@ version.workspace = true
 license.workspace = true
 rust-version.workspace = true
 
+[features]
+# Exposes src/testkey.rs to integration tests and to other crates' tests.
+test-support = ["dep:rsa", "dep:rand_core_06"]
+
 [dependencies]
 momulus-core.workspace = true
 momulus-workspace.workspace = true
@@ -20,9 +24,13 @@ serde_json.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
+rsa = { workspace = true, optional = true }
+rand_core_06 = { workspace = true, optional = true }
 url.workspace = true
 
 [dev-dependencies]
+# The crate's own integration tests need the generated key too.
+momulus-github = { workspace = true, features = ["test-support"] }
 insta.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 tempfile.workspace = true
